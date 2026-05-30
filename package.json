@@ -1,9 +1,11 @@
 {
-	"name": "obsidian-sample-plugin",
-	"version": "1.0.0",
-	"description": "This is a sample plugin for Obsidian (https://obsidian.md)",
+	"name": "see-also-sidebar",
+	"version": "1.1.0",
+	"description": "Display related notes in a sidebar view",
 	"main": "main.js",
-	"type": "module",
+	"dependencies": {
+		"mustache": "^4.2.0"
+	},
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
 		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
@@ -14,6 +16,7 @@
 	"license": "0-BSD",
 	"devDependencies": {
 		"@eslint/js": "^9.39.4",
+		"@types/mustache": "^4.2.6",
 		"@types/node": "^22.15.17",
 		"esbuild": "0.25.5",
 		"eslint": "^9.39.4",

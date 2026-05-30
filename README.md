@@ -1,92 +1,266 @@
-# Obsidian Sample Plugin
+# See Also Sidebar
 
-This is a sample plugin for Obsidian (https://obsidian.md).
+Display related notes from frontmatter in a dedicated sidebar view.
 
-This project uses TypeScript to provide type checking and documentation.
-The repo depends on the latest plugin API (obsidian.d.ts) in TypeScript Definition format, which contains TSDoc comments describing what it does.
+| Field | Value |
+| --- | --- |
+| Author | David Breece |
+| Version | 1.1.0 |
+| Minimum Obsidian version | 1.7.2 |
 
-This sample plugin demonstrates some of the basic functionality the plugin API can do.
+## Table of contents
 
-- Adds a ribbon icon, which shows a Notice when clicked.
-- Adds a command "Open modal (simple)" which opens a Modal.
-- Adds a plugin setting tab to the settings page.
-- Registers a global click event and outputs a Notice on click.
-- Registers a global interval which logs 'setInterval' to the console.
+- [Overview](#overview)
+- [Features](#features)
+- [Installation](#installation)
+- [Usage (basic)](#usage-basic)
+- [Usage (template system)](#usage-template-system)
+- [Configuration](#configuration)
+- [Examples](#examples)
+- [Development](#development)
+- [License](#license)
 
-## First time developing plugins?
+## Overview
 
-Quick starting guide for new plugin devs:
+See Also Sidebar reads a `see-also` property from the active note frontmatter and renders related notes in a sidebar panel.
 
-- Check if [someone already developed a plugin for what you want](https://obsidian.md/plugins)! There might be an existing plugin similar enough that you can partner up with.
-- Make a copy of this repo as a template with the "Use this template" button (login to GitHub if you don't see it).
-- Clone your repo to a local development folder. For convenience, you can place this folder in your `.obsidian/plugins/your-plugin-name` folder.
-- Install NodeJS, then run `npm i` in the command line under your repo folder.
-- Run `npm run dev` to compile your plugin from `src/main.ts` to `main.js`.
-- Make changes to `src/main.ts` (or create new `.ts` files). Those changes should be automatically compiled into `main.js`.
-- Reload Obsidian to load the new version of your plugin.
-- Enable plugin in settings window.
-- For updates to the Obsidian API run `npm update` in the command line under your repo folder.
+It is useful for:
 
-## Releasing new releases
+- Linking conceptually related notes without changing your main note body
+- Improving navigation between connected notes
+- Showing context-specific links for your current working note
 
-- Update your `manifest.json` with your new version number, such as `1.0.1`, and the minimum Obsidian version required for your latest release.
-- Update your `versions.json` file with `"new-plugin-version": "minimum-obsidian-version"` so older versions of Obsidian can download an older version of your plugin that's compatible.
-- Create new GitHub release using your new version number as the "Tag version". Use the exact version number, don't include a prefix `v`. See here for an example: https://github.com/obsidianmd/obsidian-sample-plugin/releases
-- Upload the files `manifest.json`, `main.js`, `styles.css` as binary attachments. Note: The manifest.json file must be in two places, first the root path of your repository and also in the release.
-- Publish the release.
+## Features
 
-> You can simplify the version bump process by running `npm version patch`, `npm version minor` or `npm version major` after updating `minAppVersion` manually in `manifest.json`.
-> The command will bump version in `manifest.json` and `package.json`, and add the entry for the new version to `versions.json`
+- Sidebar view for related notes
+- Configurable template system with Mustache syntax
+- Auto-refresh when active note or metadata changes
+- Support for multiple `see-also` note formats
+- Ribbon icon to toggle/open the sidebar
+- Graceful fallback to a default list if no template is configured ✨
 
-## Adding your plugin to the community plugin list
+## Installation
 
-- Check the [plugin guidelines](https://docs.obsidian.md/Plugins/Releasing/Plugin+guidelines).
-- Publish an initial version.
-- Make sure you have a `README.md` file in the root of your repo.
-- Make a pull request at https://github.com/obsidianmd/obsidian-releases to add your plugin.
+This plugin is not yet in the Obsidian Community Plugins directory.
 
-## How to use
+### Manual installation
 
-- Clone this repo.
-- Make sure your NodeJS is at least v18 (`node --version`).
-- `npm i` to install dependencies.
-- `npm run dev` to start compilation in watch mode.
+1. Build or obtain plugin release files: `main.js`, `manifest.json`, and `styles.css`.
+2. Create this folder in your vault:
 
-## Manually installing the plugin
-
-- Copy over `main.js`, `styles.css`, `manifest.json` to your vault `VaultFolder/.obsidian/plugins/your-plugin-id/`.
-
-## Improve code quality with eslint
-
-- [ESLint](https://eslint.org/) is a tool that analyzes your code to quickly find problems. You can run ESLint against your plugin to find common bugs and ways to improve your code.
-- This project already has eslint preconfigured, you can invoke a check by running`npm run lint`
-- Together with a custom eslint [plugin](https://github.com/obsidianmd/eslint-plugin) for Obsidan specific code guidelines.
-- A GitHub action is preconfigured to automatically lint every commit on all branches.
-
-## Funding URL
-
-You can include funding URLs where people who use your plugin can financially support it.
-
-The simple way is to set the `fundingUrl` field to your link in your `manifest.json` file:
-
-```json
-{
-	"fundingUrl": "https://buymeacoffee.com"
-}
+```bash
+<YourVault>/.obsidian/plugins/see-also-sidebar/
 ```
 
-If you have multiple URLs, you can also do:
+1. Copy files into that folder.
+2. In Obsidian, go to **Settings -> Community plugins**.
+3. Enable **See Also Sidebar**.
 
-```json
-{
-	"fundingUrl": {
-		"Buy Me a Coffee": "https://buymeacoffee.com",
-		"GitHub Sponsor": "https://github.com/sponsors",
-		"Patreon": "https://www.patreon.com/"
-	}
-}
+## Usage (basic)
+
+Add a `see-also` property to a note frontmatter block.
+
+### YAML list format (recommended)
+
+```yaml
+---
+title: My Note
+see-also:
+  - Note A
+  - Note B
+  - Concepts/Note C
+---
 ```
 
-## API Documentation
+### Inline array format
 
-See https://docs.obsidian.md
+```yaml
+---
+see-also: [Note A, Note B, Concepts/Note C]
+---
+```
+
+### Single string
+
+```yaml
+---
+see-also: Note A
+---
+```
+
+### With wikilinks
+
+```yaml
+---
+see-also:
+  - "[[Note A]]"
+  - "[[Projects/Note B]]"
+---
+```
+
+### With aliases
+
+```yaml
+---
+see-also:
+  - "[[Long Technical Note|Quick summary]]"
+  - "Project/Spec|Spec overview"
+---
+```
+
+### With headings/subpaths
+
+```yaml
+---
+see-also:
+  - "Architecture#API Layer"
+  - "[[Roadmap#Q3 Priorities]]"
+  - "[[Research/Model Notes#Benchmarks|Benchmark section]]"
+---
+```
+
+## Usage (template system)
+
+The sidebar can render using a custom Markdown template and Mustache variables.
+
+### Configure template path
+
+1. Open **Settings -> Community plugins -> See Also Sidebar**.
+2. In **Template file**, provide a vault-relative path (for example: `Templates/see-also.md`).
+3. You can also use **Browse** to pick a Markdown file.
+
+### Create a template note
+
+Create a note at your configured path (for example, `Templates/see-also.md`) and add template content.
+
+### Available template variables
+
+| Variable | Description |
+| --- | --- |
+| `{{active.title}}` | Active note title (basename) |
+| `{{active.basename}}` | Active note basename |
+| `{{active.path}}` | Active note vault path |
+| `{{hasSeeAlso}}` | Boolean flag, true when at least one related note exists |
+| `{{count}}` | Number of related notes |
+| `{{#seeAlso}} ... {{/seeAlso}}` | Loop over related note entries |
+| `{{linkpath}}` | Link path portion of each related entry |
+| `{{display}}` | Display text (alias if provided, otherwise link text) |
+| `{{title}}` | Resolved note basename when file exists |
+| `{{exists}}` | Boolean flag indicating whether note resolves in vault |
+| `{{wikilink}}` | Prebuilt wikilink for the related entry |
+
+### Example template
+
+```markdown
+## See also
+
+{{#hasSeeAlso}}
+Found **{{count}}** related note(s) for **{{active.title}}**:
+
+{{#seeAlso}}
+- {{wikilink}}{{^exists}} _(missing)_{{/exists}}
+{{/seeAlso}}
+{{/hasSeeAlso}}
+
+{{^hasSeeAlso}}
+No related notes for **{{active.title}}** yet.
+{{/hasSeeAlso}}
+```
+
+What this does:
+
+- Shows a heading and related-note count
+- Renders each item as a wikilink
+- Marks unresolved notes as `(missing)`
+- Displays a fallback message when there are no related notes 📝
+
+### Fallback behavior
+
+If no template path is configured, the plugin automatically uses the built-in default list view.
+
+## Configuration
+
+Settings location:
+
+- **Settings -> Community plugins -> See Also Sidebar**
+
+Available settings:
+
+| Setting | Purpose |
+| --- | --- |
+| Template file | Vault-relative path to a Markdown template file |
+| Browse button | Opens a file picker for Markdown notes in your vault |
+| Clear button | Removes the template path and returns to default rendering |
+
+## Examples
+
+### Complete example note
+
+```yaml
+---
+title: Retrieval patterns
+tags: [knowledge, architecture]
+see-also:
+  - "[[Knowledge Graphs]]"
+  - "[[Vector Indexing#Trade-offs|Vector trade-offs]]"
+  - "Design Notes|Design overview"
+---
+
+# Retrieval patterns
+
+Main note content here.
+```
+
+### Example template with style variants
+
+```markdown
+### Related to {{active.title}}
+
+{{#hasSeeAlso}}
+> Jump to connected notes:
+
+{{#seeAlso}}
+- ✅ {{wikilink}}
+{{/seeAlso}}
+
+_Path: {{active.path}}_
+{{/hasSeeAlso}}
+
+{{^hasSeeAlso}}
+> Add `see-also` in frontmatter to populate this panel.
+{{/hasSeeAlso}}
+```
+
+### Screenshot guidance
+
+If you want screenshots in this README, add image files to a folder such as `docs/images/` and include sections like:
+
+- Sidebar with default list rendering
+- Sidebar with custom template rendering
+- Settings panel with template picker ⚙️
+
+Example markdown image reference:
+
+```markdown
+![See Also Sidebar - default list](docs/images/sidebar-default.png)
+```
+
+## Development
+
+Build from source:
+
+```bash
+npm install
+npm run build
+npm run lint
+```
+
+For watch mode during development:
+
+```bash
+npm run dev
+```
+
+## License
+
+This project includes a `LICENSE` file at the repository root.
