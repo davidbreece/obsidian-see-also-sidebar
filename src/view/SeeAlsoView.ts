@@ -1,5 +1,10 @@
-import { ItemView, WorkspaceLeaf } from "obsidian";
-import { parseSeeAlso, resolveSeeAlsoEntries } from "../seeAlso/resolve";
+import { ItemView, MarkdownRenderer, TFile, WorkspaceLeaf } from "obsidian";
+import {
+  buildTemplateContext,
+  parseSeeAlso,
+  resolveSeeAlsoEntries,
+  type SeeAlsoResolvedEntry,
+} from "../seeAlso/resolve";
 import type { TemplateEngine } from "../template/templateEngine";
 
 export interface SeeAlsoViewDeps {
@@ -72,7 +77,23 @@ export class SeeAlsoView extends ItemView {
     root.empty();
     root.addClass("see-also-root");
 
-    await this.renderManual(root, notes, active.path, token);
+    const resolved = await resolveSeeAlsoEntries(
+      notes,
+      active.path,
+      this.app.metadataCache
+    );
+    if (token !== this.renderToken) return;
+
+    const renderedFromTemplate = await this.renderTemplate(
+      root,
+      active,
+      resolved,
+      token
+    );
+    if (token !== this.renderToken) return;
+    if (renderedFromTemplate) return;
+
+    this.renderManual(root, resolved, active.path);
   }
 
   // Walk up the parent chain to check if this leaf lives in the root
@@ -119,19 +140,104 @@ export class SeeAlsoView extends ItemView {
     this.lastMainLeaf = candidate;
   }
 
-  private async renderManual(
-    root: HTMLElement,
-    notes: string[],
+  private bindLinkNavigation(
+    anchor: HTMLAnchorElement,
     sourcePath: string,
+    getLinkpath: () => string
+  ): void {
+    // Capture the currently active main-area leaf before this sidebar
+    // click shifts focus to the sidebar leaf.
+    anchor.addEventListener("mousedown", () => {
+      this.captureMainLeafBeforeClick();
+    });
+
+    anchor.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+
+      this.captureMainLeafBeforeClick();
+
+      const linkpath = getLinkpath().trim();
+      if (!linkpath) return;
+
+      const file = this.app.metadataCache.getFirstLinkpathDest(linkpath, sourcePath);
+      if (!file) return;
+
+      const newTab =
+        this.deps.getOpenInNewTabByDefault() || event.ctrlKey || event.metaKey;
+      const targetLeaf = this.getTargetLeaf(newTab);
+      void targetLeaf.openFile(file);
+    });
+  }
+
+  private normalizeRenderedLinkpath(rawTarget: string | null): string {
+    if (!rawTarget) return "";
+
+    const trimmed = rawTarget.trim();
+    if (!trimmed || trimmed.startsWith("#") || trimmed.startsWith("obsidian://")) {
+      return "";
+    }
+
+    const hashIndex = trimmed.indexOf("#");
+    const base = hashIndex === -1 ? trimmed : trimmed.slice(0, hashIndex);
+    return base;
+  }
+
+  private wireRenderedTemplateLinks(root: HTMLElement, sourcePath: string): void {
+    const links = root.querySelectorAll("a.internal-link");
+
+    for (const node of Array.from(links)) {
+      if (!node.instanceOf(HTMLAnchorElement)) continue;
+      const link = node;
+
+      link.classList.add("see-also-link");
+      this.bindLinkNavigation(link, sourcePath, () => {
+        const rawTarget = link.getAttribute("data-href") ?? link.getAttribute("href");
+        return this.normalizeRenderedLinkpath(rawTarget);
+      });
+    }
+  }
+
+  private async renderTemplate(
+    root: HTMLElement,
+    activeFile: TFile,
+    resolved: SeeAlsoResolvedEntry[],
     token: number
-  ): Promise<void> {
-    const resolved = await resolveSeeAlsoEntries(
-      notes,
-      sourcePath,
-      this.app.metadataCache
+  ): Promise<boolean> {
+    const templatePath = this.deps.getTemplatePath().trim();
+    if (!templatePath) return false;
+
+    let template: string | null;
+    try {
+      template = await this.deps.templateEngine.loadTemplateContent();
+    } catch (error) {
+      console.error("[see-also-sidebar] Failed to load template", error);
+      return false;
+    }
+
+    if (!template) return false;
+    if (token !== this.renderToken) return true;
+
+    const context = buildTemplateContext(activeFile, this.app.metadataCache, resolved);
+    const markdown = this.deps.templateEngine.render(
+      template,
+      context as unknown as Record<string, unknown>
     );
 
-    if (token !== this.renderToken) return;
+    root.empty();
+    await MarkdownRenderer.render(this.app, markdown, root, activeFile.path, this);
+    if (token !== this.renderToken) return true;
+
+    this.wireRenderedTemplateLinks(root, activeFile.path);
+    return true;
+  }
+
+  private renderManual(
+    root: HTMLElement,
+    resolved: SeeAlsoResolvedEntry[],
+    sourcePath: string
+  ): void {
 
     root.empty();
     root.createEl("h3", { text: "See also" });
@@ -153,29 +259,7 @@ export class SeeAlsoView extends ItemView {
         cls: "see-also-link",
       });
 
-      // Capture the currently active main-area leaf before this sidebar
-      // click shifts focus to the sidebar leaf.
-      a.addEventListener("mousedown", () => {
-        this.captureMainLeafBeforeClick();
-      });
-
-      a.addEventListener("click", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-
-        this.captureMainLeafBeforeClick();
-
-        const file = this.app.metadataCache.getFirstLinkpathDest(
-          entry.linkpath,
-          sourcePath
-        );
-        if (!file) return;
-
-        const newTab =
-          this.deps.getOpenInNewTabByDefault() || event.ctrlKey || event.metaKey;
-        const targetLeaf = this.getTargetLeaf(newTab);
-        void targetLeaf.openFile(file);
-      });
+      this.bindLinkNavigation(a, sourcePath, () => entry.linkpath);
 
       a.setAttribute("role", "button");
       a.setAttribute("tabindex", "0");
