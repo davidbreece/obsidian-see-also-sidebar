@@ -50,6 +50,13 @@ export class TemplateEngine {
   }
 
   render(template: string, context: Record<string, unknown>): string {
-    return Mustache.render(template, context);
+    const originalEscape = Mustache.escape;
+    // Template output is markdown, so escaping here corrupts wikilinks like [[...]].
+    Mustache.escape = (value: string): string => value;
+    try {
+      return Mustache.render(template, context);
+    } finally {
+      Mustache.escape = originalEscape;
+    }
   }
 }

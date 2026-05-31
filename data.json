@@ -1,4 +1,5 @@
 {
   "templatePath": "Templates/see-also-template.md",
-  "openInNewTabByDefault": true
+  "openInNewTabByDefault": true,
+  "automaticSuggestions": false
 }

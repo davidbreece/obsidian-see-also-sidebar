@@ -38,6 +38,7 @@ It is useful for:
 - Support for multiple `see-also` note formats
 - Ribbon icon to toggle/open the sidebar
 - Optional default behavior to open related notes in a new tab
+- Optional automatic suggestions based on shared tags (off by default)
 - Graceful fallback to a default list if no template is configured ✨
 
 ## Installation
@@ -60,6 +61,8 @@ This plugin is not yet in the Obsidian Community Plugins directory.
 ## Usage (basic)
 
 Add a `see-also` property to a note frontmatter block.
+
+By default, only explicit `see-also` entries are shown.
 
 ### YAML list format (recommended)
 
@@ -119,6 +122,17 @@ see-also:
   - "[[Research/Model Notes#Benchmarks|Benchmark section]]"
 ---
 ```
+
+### Automatic suggestions (shared tags)
+
+If **Automatic suggestions** is enabled in settings, the sidebar also includes notes that share tags with the active note.
+
+Behavior details:
+
+- Explicit `see-also` entries are always included.
+- Tag-derived suggestions are appended to the explicit list.
+- The active note is never included in automatic suggestions.
+- Duplicate notes (for example, when a note is both explicit and tag-derived) are shown only once.
 
 ## Usage (template system)
 
@@ -193,6 +207,7 @@ Available settings:
 | Browse button | Opens a file picker for Markdown notes in your vault |
 | Clear button | Removes the template path and returns to default rendering |
 | Open links in new tab | Opens related-note links in a new tab without requiring Ctrl/Cmd-click |
+| Automatic suggestions | Adds notes that share tags with the active note; off by default |
 
 ## Examples
 

@@ -11,11 +11,13 @@ import {
 export interface SeeAlsoSettings {
   templatePath: string;
   openInNewTabByDefault: boolean;
+  automaticSuggestions: boolean;
 }
 
 export const DEFAULT_SETTINGS: SeeAlsoSettings = {
   templatePath: "",
   openInNewTabByDefault: false,
+  automaticSuggestions: false,
 };
 
 class TemplateFileSuggestModal extends FuzzySuggestModal<TFile> {
@@ -111,6 +113,20 @@ export class SeeAlsoSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.openInNewTabByDefault)
           .onChange(async (value) => {
             this.plugin.settings.openInNewTabByDefault = value;
+            await this.plugin.saveSettings();
+          });
+      });
+
+    new Setting(containerEl)
+      .setName("Automatic suggestions")
+      .setDesc(
+        "When enabled, notes sharing tags with the active note are suggested in addition to explicit see-also notes."
+      )
+      .addToggle((toggle) => {
+        toggle
+          .setValue(this.plugin.settings.automaticSuggestions)
+          .onChange(async (value) => {
+            this.plugin.settings.automaticSuggestions = value;
             await this.plugin.saveSettings();
           });
       });

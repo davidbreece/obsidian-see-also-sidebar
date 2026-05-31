@@ -13,6 +13,10 @@ export default class SeeAlsoPlugin extends Plugin {
     return this.settings.openInNewTabByDefault === true;
   }
 
+  private getAutomaticSuggestionsEnabled(): boolean {
+    return this.settings.automaticSuggestions === true;
+  }
+
   private parseSettings(data: unknown): Partial<SeeAlsoSettings> {
     if (!data || typeof data !== "object") return {};
     const record = data as Record<string, unknown>;
@@ -22,10 +26,15 @@ export default class SeeAlsoPlugin extends Plugin {
       typeof record.openInNewTabByDefault === "boolean"
         ? record.openInNewTabByDefault
         : undefined;
+    const automaticSuggestions =
+      typeof record.automaticSuggestions === "boolean"
+        ? record.automaticSuggestions
+        : undefined;
 
     return {
       templatePath,
       openInNewTabByDefault,
+      automaticSuggestions,
     };
   }
 
@@ -46,6 +55,7 @@ export default class SeeAlsoPlugin extends Plugin {
         templateEngine: this.templateEngine,
         getTemplatePath: () => this.settings.templatePath,
         getOpenInNewTabByDefault: () => this.getOpenInNewTabByDefault(),
+        getAutomaticSuggestionsEnabled: () => this.getAutomaticSuggestionsEnabled(),
       })
     );
 

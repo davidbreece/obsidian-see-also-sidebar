@@ -1,6 +1,8 @@
 import { ItemView, MarkdownRenderer, TFile, WorkspaceLeaf } from "obsidian";
 import {
+  buildTagDerivedSeeAlsoEntries,
   buildTemplateContext,
+  dedupeSeeAlsoEntries,
   parseSeeAlso,
   resolveSeeAlsoEntries,
   type SeeAlsoResolvedEntry,
@@ -11,14 +13,17 @@ export interface SeeAlsoViewDeps {
   templateEngine: TemplateEngine;
   getTemplatePath: () => string;
   getOpenInNewTabByDefault: () => boolean;
+  getAutomaticSuggestionsEnabled: () => boolean;
 }
 
 const VIEW_TYPE = "see-also-sidebar";
+const TARGET_ATTR = "data-see-also-target";
 
 export class SeeAlsoView extends ItemView {
   private notes: string[] = [];
   private renderToken = 0;
-  private lastMainLeaf: WorkspaceLeaf | null = null;
+  private currentSourcePath: string | null = null;
+  private delegatedHandlersInstalled = false;
 
   constructor(leaf: WorkspaceLeaf, private readonly deps: SeeAlsoViewDeps) {
     super(leaf);
@@ -37,20 +42,61 @@ export class SeeAlsoView extends ItemView {
   }
 
   async onOpen(): Promise<void> {
-    // Watch for active-leaf changes, but only record the leaf if it's in
-    // the root split (main editor area) — never a sidebar leaf.
-    this.registerEvent(
-      this.app.workspace.on("active-leaf-change", (leaf) => {
-        if (leaf && this.isInRootSplit(leaf)) {
-          this.lastMainLeaf = leaf;
-        }
-      })
-    );
+    this.installDelegatedHandlers();
     await this.refresh();
   }
 
   async onClose(): Promise<void> {
-    // No-op for now; kept for lifecycle symmetry.
+    // No-op; kept for lifecycle symmetry.
+  }
+
+  private installDelegatedHandlers(): void {
+    if (this.delegatedHandlersInstalled) return;
+    this.delegatedHandlersInstalled = true;
+
+    const openFromEvent = (event: MouseEvent): void => {
+      if (event.type === "auxclick" && event.button !== 1) return;
+      if (event.type === "click" && event.button !== 0) return;
+
+      const rawTarget = event.target;
+      if (!rawTarget || typeof rawTarget !== "object") return;
+      if (!(rawTarget instanceof Element)) return;
+
+      const clickable = rawTarget.closest(`[${TARGET_ATTR}]`);
+      if (!(clickable instanceof HTMLElement)) return;
+      if (!this.containerEl.contains(clickable)) return;
+
+      const target = clickable.getAttribute(TARGET_ATTR) ?? "";
+      if (!target) return;
+
+      event.preventDefault();
+
+      const sourcePath = this.currentSourcePath ?? this.app.workspace.getActiveFile()?.path ?? "";
+      if (!sourcePath) return;
+
+      const file = this.resolveExistingTargetFile(target, sourcePath);
+      if (!file) return;
+
+      const openInNewTab =
+        this.deps.getOpenInNewTabByDefault() ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.button === 1;
+
+      void (async () => {
+        const leaf = this.app.workspace.getLeaf(openInNewTab ? "tab" : false);
+        await leaf.openFile(file);
+      })();
+    };
+
+    this.registerDomEvent(this.containerEl, "click", openFromEvent, {
+      capture: true,
+      passive: false,
+    });
+    this.registerDomEvent(this.containerEl, "auxclick", openFromEvent, {
+      capture: true,
+      passive: false,
+    });
   }
 
   update(notes: string[]): void {
@@ -61,9 +107,12 @@ export class SeeAlsoView extends ItemView {
   async refresh(): Promise<void> {
     const active = this.app.workspace.getActiveFile();
     if (!active) {
+      this.currentSourcePath = null;
       this.containerEl.empty();
       return;
     }
+
+    this.currentSourcePath = active.path;
 
     const cache = this.app.metadataCache.getFileCache(active);
     const seeAlsoValue: unknown = cache?.frontmatter?.["see-also"] as unknown;
@@ -82,121 +131,30 @@ export class SeeAlsoView extends ItemView {
       active.path,
       this.app.metadataCache
     );
+
+    const withAutomaticSuggestions = this.deps.getAutomaticSuggestionsEnabled()
+      ? dedupeSeeAlsoEntries([
+          ...resolved,
+          ...buildTagDerivedSeeAlsoEntries(
+            active,
+            this.app.metadataCache,
+            this.app.vault.getMarkdownFiles()
+          ),
+        ])
+      : resolved;
+
     if (token !== this.renderToken) return;
 
     const renderedFromTemplate = await this.renderTemplate(
       root,
       active,
-      resolved,
+      withAutomaticSuggestions,
       token
     );
     if (token !== this.renderToken) return;
     if (renderedFromTemplate) return;
 
-    this.renderManual(root, resolved, active.path);
-  }
-
-  // Walk up the parent chain to check if this leaf lives in the root
-  // (main editor) split rather than a left/right sidebar split.
-  private isInRootSplit(leaf: WorkspaceLeaf): boolean {
-    let node: unknown = (leaf as WorkspaceLeaf & { parent?: unknown }).parent;
-    while (node) {
-      if (node === this.app.workspace.rootSplit) return true;
-      if (typeof node !== "object") return false;
-      node = (node as { parent?: unknown }).parent ?? null;
-    }
-    return false;
-  }
-
-  // Return the leaf we should navigate into.
-  // Priority: new tab (modifier held) → last tracked main leaf → any root
-  // leaf → new tab as last resort.
-  private getTargetLeaf(newTab: boolean): WorkspaceLeaf {
-    if (newTab) {
-      return this.app.workspace.getLeaf("tab");
-    }
-
-    if (this.lastMainLeaf) {
-      return this.lastMainLeaf;
-    }
-    // Fallback: grab the first leaf iterateRootLeaves finds.
-    let fallback: WorkspaceLeaf | null = null;
-    this.app.workspace.iterateRootLeaves((leaf) => {
-      if (!fallback) fallback = leaf;
-    });
-
-    if (fallback) {
-      return fallback;
-    }
-
-    // Last resort when no root leaf can be found.
-    return this.app.workspace.getLeaf(newTab ? "tab" : false);
-  }
-
-  private captureMainLeafBeforeClick(): void {
-    const candidate = this.app.workspace.getLeaf(false);
-    if (candidate === this.leaf) return;
-    if (!this.isInRootSplit(candidate)) return;
-    this.lastMainLeaf = candidate;
-  }
-
-  private bindLinkNavigation(
-    anchor: HTMLAnchorElement,
-    sourcePath: string,
-    getLinkpath: () => string
-  ): void {
-    // Capture the currently active main-area leaf before this sidebar
-    // click shifts focus to the sidebar leaf.
-    anchor.addEventListener("mousedown", () => {
-      this.captureMainLeafBeforeClick();
-    });
-
-    anchor.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      event.stopImmediatePropagation();
-
-      this.captureMainLeafBeforeClick();
-
-      const linkpath = getLinkpath().trim();
-      if (!linkpath) return;
-
-      const file = this.app.metadataCache.getFirstLinkpathDest(linkpath, sourcePath);
-      if (!file) return;
-
-      const newTab =
-        this.deps.getOpenInNewTabByDefault() || event.ctrlKey || event.metaKey;
-      const targetLeaf = this.getTargetLeaf(newTab);
-      void targetLeaf.openFile(file);
-    });
-  }
-
-  private normalizeRenderedLinkpath(rawTarget: string | null): string {
-    if (!rawTarget) return "";
-
-    const trimmed = rawTarget.trim();
-    if (!trimmed || trimmed.startsWith("#") || trimmed.startsWith("obsidian://")) {
-      return "";
-    }
-
-    const hashIndex = trimmed.indexOf("#");
-    const base = hashIndex === -1 ? trimmed : trimmed.slice(0, hashIndex);
-    return base;
-  }
-
-  private wireRenderedTemplateLinks(root: HTMLElement, sourcePath: string): void {
-    const links = root.querySelectorAll("a.internal-link");
-
-    for (const node of Array.from(links)) {
-      if (!node.instanceOf(HTMLAnchorElement)) continue;
-      const link = node;
-
-      link.classList.add("see-also-link");
-      this.bindLinkNavigation(link, sourcePath, () => {
-        const rawTarget = link.getAttribute("data-href") ?? link.getAttribute("href");
-        return this.normalizeRenderedLinkpath(rawTarget);
-      });
-    }
+    this.renderManual(root, withAutomaticSuggestions);
   }
 
   private async renderTemplate(
@@ -229,16 +187,26 @@ export class SeeAlsoView extends ItemView {
     await MarkdownRenderer.render(this.app, markdown, root, activeFile.path, this);
     if (token !== this.renderToken) return true;
 
-    this.wireRenderedTemplateLinks(root, activeFile.path);
+    const renderedLinks = root.querySelectorAll("a.internal-link, a[data-href]");
+    for (const link of Array.from(renderedLinks)) {
+      const rawTarget = link.getAttribute("data-href") ?? link.getAttribute("href") ?? "";
+      const normalizedTarget = this.normalizeLinkTarget(rawTarget);
+      if (!normalizedTarget) continue;
+
+      const anchor = link.ownerDocument.createElement("a");
+      anchor.className = "see-also-link";
+      anchor.setAttribute(TARGET_ATTR, normalizedTarget);
+      anchor.setAttribute("href", "#");
+      anchor.textContent = link.textContent ?? "";
+      link.replaceWith(anchor);
+    }
     return true;
   }
 
   private renderManual(
     root: HTMLElement,
-    resolved: SeeAlsoResolvedEntry[],
-    sourcePath: string
+    resolved: SeeAlsoResolvedEntry[]
   ): void {
-
     root.empty();
     root.createEl("h3", { text: "See also" });
 
@@ -254,22 +222,71 @@ export class SeeAlsoView extends ItemView {
 
     for (const entry of resolved) {
       const li = ul.createEl("li");
-      const a = li.createEl("a", {
+      const target = entry.path || entry.linkpath || entry.display;
+      const normalizedTarget = this.normalizeLinkTarget(target);
+      if (!normalizedTarget) continue;
+
+      li.createEl("a", {
         text: entry.display,
         cls: "see-also-link",
-      });
-
-      this.bindLinkNavigation(a, sourcePath, () => entry.linkpath);
-
-      a.setAttribute("role", "button");
-      a.setAttribute("tabindex", "0");
-
-      a.addEventListener("keydown", (event: KeyboardEvent) => {
-        if (event.key !== "Enter" && event.key !== " ") return;
-        event.preventDefault();
-        a.click();
+        href: "#",
+        attr: {
+          [TARGET_ATTR]: normalizedTarget,
+          role: "link",
+          tabindex: "0",
+        },
       });
     }
+  }
+
+  private resolveExistingTargetFile(rawTarget: string, sourcePath: string): TFile | null {
+    const trimmed = rawTarget.trim();
+    if (!trimmed) return null;
+
+    const fileFromLinkpath = this.app.metadataCache.getFirstLinkpathDest(trimmed, sourcePath);
+    if (fileFromLinkpath) return fileFromLinkpath;
+
+    const direct = this.app.vault.getAbstractFileByPath(trimmed);
+    if (direct instanceof TFile) return direct;
+
+    if (trimmed.toLowerCase().endsWith(".md")) {
+      const withoutMd = trimmed.slice(0, -3);
+      const noExtResolved = this.app.metadataCache.getFirstLinkpathDest(withoutMd, sourcePath);
+      if (noExtResolved) return noExtResolved;
+    } else {
+      const withMd = `${trimmed}.md`;
+      const withMdDirect = this.app.vault.getAbstractFileByPath(withMd);
+      if (withMdDirect instanceof TFile) return withMdDirect;
+    }
+
+    return null;
+  }
+
+  private normalizeLinkTarget(rawTarget: string): string {
+    let normalized = rawTarget.trim();
+    if (!normalized) return "";
+
+    try {
+      normalized = decodeURIComponent(normalized);
+    } catch {
+      // Ignore decode failures and continue with raw value.
+    }
+
+    if (normalized.startsWith("[[") && normalized.endsWith("]]")) {
+      normalized = normalized.slice(2, -2);
+    }
+
+    const pipeIndex = normalized.indexOf("|");
+    if (pipeIndex !== -1) normalized = normalized.slice(0, pipeIndex);
+
+    const hashIndex = normalized.indexOf("#");
+    if (hashIndex !== -1) normalized = normalized.slice(0, hashIndex);
+
+    const queryIndex = normalized.indexOf("?");
+    if (queryIndex !== -1) normalized = normalized.slice(0, queryIndex);
+
+    normalized = normalized.replace(/^\/+/, "").replace(/\\/g, "/").trim();
+    return normalized;
   }
 }
 
