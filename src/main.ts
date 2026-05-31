@@ -1,12 +1,10 @@
-import { Plugin, TAbstractFile, TFile } from "obsidian";
+import { Plugin, TFile } from "obsidian";
 
 import { DEFAULT_SETTINGS, type SeeAlsoSettings, SeeAlsoSettingTab } from "./settings";
-import { TemplateEngine } from "./template/templateEngine";
 import { SeeAlsoView, SEE_ALSO_VIEW_TYPE } from "./view/SeeAlsoView";
 
 export default class SeeAlsoPlugin extends Plugin {
   settings: SeeAlsoSettings = DEFAULT_SETTINGS;
-  private templateEngine!: TemplateEngine;
   private lastRefreshedActivePath: string | null = null;
 
   private getOpenInNewTabByDefault(): boolean {
@@ -17,25 +15,30 @@ export default class SeeAlsoPlugin extends Plugin {
     return this.settings.automaticSuggestions === true;
   }
 
+  private getGroupAutomaticSuggestionsByTagEnabled(): boolean {
+    // This setting is only meaningful when automatic suggestions are enabled.
+    return this.getAutomaticSuggestionsEnabled() && this.settings.groupAutomaticSuggestionsByTag === true;
+  }
+
   private parseSettings(data: unknown): Partial<SeeAlsoSettings> {
     if (!data || typeof data !== "object") return {};
     const record = data as Record<string, unknown>;
+    const parsed: Partial<SeeAlsoSettings> = {};
 
-    const templatePath = typeof record.templatePath === "string" ? record.templatePath : undefined;
-    const openInNewTabByDefault =
-      typeof record.openInNewTabByDefault === "boolean"
-        ? record.openInNewTabByDefault
-        : undefined;
-    const automaticSuggestions =
-      typeof record.automaticSuggestions === "boolean"
-        ? record.automaticSuggestions
-        : undefined;
+    if (typeof record.sidebarHeadingText === "string") {
+      parsed.sidebarHeadingText = record.sidebarHeadingText;
+    }
+    if (typeof record.openInNewTabByDefault === "boolean") {
+      parsed.openInNewTabByDefault = record.openInNewTabByDefault;
+    }
+    if (typeof record.automaticSuggestions === "boolean") {
+      parsed.automaticSuggestions = record.automaticSuggestions;
+    }
+    if (typeof record.groupAutomaticSuggestionsByTag === "boolean") {
+      parsed.groupAutomaticSuggestionsByTag = record.groupAutomaticSuggestionsByTag;
+    }
 
-    return {
-      templatePath,
-      openInNewTabByDefault,
-      automaticSuggestions,
-    };
+    return parsed;
   }
 
   private getView(): SeeAlsoView | null {
@@ -47,15 +50,13 @@ export default class SeeAlsoPlugin extends Plugin {
 
   async onload(): Promise<void> {
     await this.loadSettings();
-    this.templateEngine = new TemplateEngine(this.app.vault);
-    this.templateEngine.setTemplatePath(this.settings.templatePath);
 
     this.registerView(SEE_ALSO_VIEW_TYPE, (leaf) =>
       new SeeAlsoView(leaf, {
-        templateEngine: this.templateEngine,
-        getTemplatePath: () => this.settings.templatePath,
+        getSidebarHeadingText: () => this.settings.sidebarHeadingText,
         getOpenInNewTabByDefault: () => this.getOpenInNewTabByDefault(),
         getAutomaticSuggestionsEnabled: () => this.getAutomaticSuggestionsEnabled(),
+        getGroupAutomaticSuggestionsByTagEnabled: () => this.getGroupAutomaticSuggestionsByTagEnabled(),
       })
     );
 
@@ -84,34 +85,6 @@ export default class SeeAlsoPlugin extends Plugin {
       })
     );
 
-    // Invalidate template cache if the template file changes.
-    this.registerEvent(
-      this.app.vault.on("modify", (file: TAbstractFile) => {
-        if (file instanceof TFile && file.path === this.settings.templatePath) {
-          this.templateEngine.invalidate();
-          void this.refresh();
-        }
-      })
-    );
-
-    this.registerEvent(
-      this.app.vault.on("rename", (_file: TAbstractFile, oldPath: string) => {
-        if (oldPath === this.settings.templatePath) {
-          this.templateEngine.invalidate();
-          void this.refresh();
-        }
-      })
-    );
-
-    this.registerEvent(
-      this.app.vault.on("delete", (file: TAbstractFile) => {
-        if (file.path === this.settings.templatePath) {
-          this.templateEngine.invalidate();
-          void this.refresh();
-        }
-      })
-    );
-
     this.app.workspace.onLayoutReady(() => {
       void this.activateView();
     });
@@ -124,7 +97,6 @@ export default class SeeAlsoPlugin extends Plugin {
 
   async saveSettings(): Promise<void> {
     await this.saveData(this.settings);
-    this.templateEngine?.setTemplatePath(this.settings.templatePath);
     void this.refresh();
   }
 

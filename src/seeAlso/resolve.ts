@@ -13,18 +13,10 @@ export interface SeeAlsoResolvedEntry {
   frontmatter: Record<string, unknown> | null;
 }
 
-export interface ActiveContext {
-  path: string;
-  basename: string;
-  title: string;
-  frontmatter: Record<string, unknown> | null;
-}
-
-export interface TemplateContext {
-  active: ActiveContext;
-  seeAlso: SeeAlsoResolvedEntry[];
-  hasSeeAlso: boolean;
-  count: number;
+export interface SeeAlsoSuggestionGroup {
+  header: string; // Display name (e.g., "Bread")
+  tagKey: string; // Full tag path for reference
+  entries: SeeAlsoResolvedEntry[];
 }
 
 export function parseSeeAlso(value: unknown): string[] {
@@ -147,28 +139,8 @@ export async function resolveSeeAlsoEntries(
   return out;
 }
 
-export function buildTemplateContext(activeFile: TFile, metadataCache: MetadataCache, seeAlso: SeeAlsoResolvedEntry[]): TemplateContext {
-  const activeCache = metadataCache.getFileCache(activeFile);
-  const fm = activeCache?.frontmatter;
-
-  const activeFrontmatter = fm && typeof fm === "object" ? fm : null;
-
-  const active: ActiveContext = {
-    path: activeFile.path,
-    basename: activeFile.basename,
-    title: activeFile.basename,
-    frontmatter: activeFrontmatter,
-  };
-
-  return {
-    active,
-    seeAlso,
-    hasSeeAlso: seeAlso.length > 0,
-    count: seeAlso.length,
-  };
-}
-
 function normalizeTag(tag: string): string {
+  // Returns an empty string when input is only whitespace and/or '#' markers.
   const normalized = tag.trim().replace(/^#+/, "").toLowerCase();
   return normalized;
 }
@@ -217,6 +189,70 @@ function hasAnySharedTags(left: Set<string>, right: Set<string>): boolean {
     if (large.has(value)) return true;
   }
   return false;
+}
+
+export function getSharedTags(left: readonly string[], right: readonly string[]): string[] {
+  if (left.length === 0 || right.length === 0) return [];
+
+  // Compare normalized tags so callers can pass raw tag strings (e.g. "#Food/Recipes").
+  const leftSet = new Set<string>();
+  for (const tag of left) {
+    const normalized = normalizeTag(tag);
+    if (normalized) leftSet.add(normalized);
+  }
+
+  const out = new Set<string>();
+  for (const tag of right) {
+    const normalized = normalizeTag(tag);
+    if (normalized && leftSet.has(normalized)) out.add(normalized);
+  }
+
+  return Array.from(out);
+}
+
+function countTagSegments(tag: string): number {
+  // Treat tags as slash-delimited paths; ignore empty segments caused by "//" or leading/trailing slashes.
+  return tag
+    .split("/")
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0).length;
+}
+
+export function selectMostSpecificTag(tags: readonly string[]): string | null {
+  if (tags.length === 0) return null;
+
+  // Chooses the tag with most segments; ties keep the first occurrence.
+  let best: string | null = null;
+  let bestSegments = -1;
+
+  for (const rawTag of tags) {
+    const normalized = normalizeTag(rawTag).replace(/^\/+|\/+$/g, "");
+    if (!normalized) continue;
+
+    const segments = countTagSegments(normalized);
+    if (segments > bestSegments) {
+      best = normalized;
+      bestSegments = segments;
+    }
+  }
+
+  return best;
+}
+
+export function tagToDisplayHeader(tag: string): string {
+  const normalized = normalizeTag(tag).replace(/^\/+|\/+$/g, "");
+  if (!normalized) return "";
+
+  const parts = normalized
+    .split("/")
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+  if (parts.length === 0) return "";
+
+  const last = parts[parts.length - 1];
+  if (last === undefined) return "";
+  // Always title-cases the last segment, so acronyms become "Api"/"Sql".
+  return last.charAt(0).toUpperCase() + last.slice(1).toLowerCase();
 }
 
 export function buildTagDerivedSeeAlsoEntries(
@@ -268,14 +304,111 @@ export function buildTagDerivedSeeAlsoEntries(
   return out;
 }
 
+function entryToDedupeKey(entry: SeeAlsoResolvedEntry): string {
+  // Match the existing semantics of dedupeSeeAlsoEntries so explicit entries can be
+  // excluded from automatic suggestions using the same key logic.
+  return entry.path
+    ? `path:${entry.path.toLowerCase()}`
+    : `link:${entry.linkpath.toLowerCase()}#${(entry.subpath ?? "").toLowerCase()}`;
+}
+
+function compareSeeAlsoEntries(a: SeeAlsoResolvedEntry, b: SeeAlsoResolvedEntry): number {
+  const titleCompare = a.display.localeCompare(b.display, undefined, { sensitivity: "base" });
+  if (titleCompare !== 0) return titleCompare;
+  return (a.path ?? a.linkpath).localeCompare(b.path ?? b.linkpath, undefined, {
+    sensitivity: "base",
+  });
+}
+
+export function buildTagDerivedSeeAlsoGroups(
+  activeFile: TFile,
+  metadataCache: MetadataCache,
+  markdownFiles: TFile[],
+  explicitEntries: readonly SeeAlsoResolvedEntry[]
+): SeeAlsoSuggestionGroup[] {
+  const activeTags = getNormalizedTagsForFile(activeFile, metadataCache);
+  if (activeTags.size === 0) return [];
+
+  const activeTagList = Array.from(activeTags);
+
+  const explicitKeys = new Set<string>();
+  for (const entry of explicitEntries) {
+    explicitKeys.add(entryToDedupeKey(entry));
+  }
+
+  const groupsByTagKey = new Map<string, SeeAlsoSuggestionGroup>();
+
+  for (const candidate of markdownFiles) {
+    if (candidate.path === activeFile.path) continue;
+
+    const candidateTags = getNormalizedTagsForFile(candidate, metadataCache);
+    if (!hasAnySharedTags(activeTags, candidateTags)) continue;
+
+    const sharedTags = getSharedTags(activeTagList, Array.from(candidateTags));
+    if (sharedTags.length === 0) continue;
+
+    const mostSpecific = selectMostSpecificTag(sharedTags);
+    if (!mostSpecific) continue;
+
+    const header = tagToDisplayHeader(mostSpecific);
+    if (!header) continue;
+
+    const cache = metadataCache.getFileCache(candidate);
+    const fm = cache?.frontmatter;
+    const frontmatter = fm && typeof fm === "object" ? fm : null;
+
+    const titleFromFrontmatter = typeof frontmatter?.title === "string" ? frontmatter.title.trim() : "";
+    const display = titleFromFrontmatter || candidate.basename;
+    const useAlias = display !== candidate.basename;
+
+    const entry: SeeAlsoResolvedEntry = {
+      raw: candidate.path,
+      linktext: candidate.path,
+      linkpath: candidate.path,
+      subpath: null,
+      display,
+      exists: true,
+      path: candidate.path,
+      title: candidate.basename,
+      wikilink: useAlias ? `[[${candidate.path}|${display}]]` : `[[${candidate.path}]]`,
+      frontmatter,
+    };
+
+    if (explicitKeys.has(entryToDedupeKey(entry))) continue;
+
+    const group = groupsByTagKey.get(mostSpecific);
+    if (group) {
+      group.entries.push(entry);
+      continue;
+    }
+
+    groupsByTagKey.set(mostSpecific, {
+      header,
+      tagKey: mostSpecific,
+      entries: [entry],
+    });
+  }
+
+  const groups = Array.from(groupsByTagKey.values()).filter((g) => g.entries.length > 0);
+  for (const group of groups) {
+    group.entries.sort(compareSeeAlsoEntries);
+  }
+
+  groups.sort((a, b) => {
+    const headerCompare = a.header.localeCompare(b.header, undefined, { sensitivity: "base" });
+    if (headerCompare !== 0) return headerCompare;
+    return a.tagKey.localeCompare(b.tagKey, undefined, { sensitivity: "base" });
+  });
+
+  return groups;
+}
+
 export function dedupeSeeAlsoEntries(entries: SeeAlsoResolvedEntry[]): SeeAlsoResolvedEntry[] {
   const seen = new Set<string>();
   const out: SeeAlsoResolvedEntry[] = [];
 
   for (const entry of entries) {
-    const key = entry.path
-      ? `path:${entry.path.toLowerCase()}`
-      : `link:${entry.linkpath.toLowerCase()}#${(entry.subpath ?? "").toLowerCase()}`;
+    const key = entryToDedupeKey(entry);
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(entry);

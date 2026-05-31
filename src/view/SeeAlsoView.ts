@@ -1,19 +1,19 @@
-import { ItemView, MarkdownRenderer, TFile, WorkspaceLeaf } from "obsidian";
+import { ItemView, TFile, WorkspaceLeaf } from "obsidian";
 import {
   buildTagDerivedSeeAlsoEntries,
-  buildTemplateContext,
+  buildTagDerivedSeeAlsoGroups,
   dedupeSeeAlsoEntries,
   parseSeeAlso,
   resolveSeeAlsoEntries,
   type SeeAlsoResolvedEntry,
+  type SeeAlsoSuggestionGroup,
 } from "../seeAlso/resolve";
-import type { TemplateEngine } from "../template/templateEngine";
 
 export interface SeeAlsoViewDeps {
-  templateEngine: TemplateEngine;
-  getTemplatePath: () => string;
+  getSidebarHeadingText: () => string;
   getOpenInNewTabByDefault: () => boolean;
   getAutomaticSuggestionsEnabled: () => boolean;
+  getGroupAutomaticSuggestionsByTagEnabled: () => boolean;
 }
 
 const VIEW_TYPE = "see-also-sidebar";
@@ -34,7 +34,7 @@ export class SeeAlsoView extends ItemView {
   }
 
   getDisplayText(): string {
-    return "See also";
+    return this.getResolvedHeadingText();
   }
 
   getIcon(): string {
@@ -132,83 +132,116 @@ export class SeeAlsoView extends ItemView {
       this.app.metadataCache
     );
 
-    const withAutomaticSuggestions = this.deps.getAutomaticSuggestionsEnabled()
-      ? dedupeSeeAlsoEntries([
+    // Keep a flat list for non-grouped rendering while also supporting grouped automatic suggestions.
+    let explicitEntries: SeeAlsoResolvedEntry[] = resolved;
+    let resolvedForRendering: SeeAlsoResolvedEntry[] = resolved;
+    let automaticGroups: SeeAlsoSuggestionGroup[] | null = null;
+
+    if (this.deps.getAutomaticSuggestionsEnabled()) {
+      const markdownFiles = this.app.vault.getMarkdownFiles();
+
+      if (this.deps.getGroupAutomaticSuggestionsByTagEnabled()) {
+        // When grouping is enabled, keep explicit entries separate and provide grouped automatic suggestions.
+        explicitEntries = dedupeSeeAlsoEntries([...resolved]);
+        automaticGroups = buildTagDerivedSeeAlsoGroups(
+          active,
+          this.app.metadataCache,
+          markdownFiles,
+          explicitEntries
+        );
+
+        const automaticFlat: SeeAlsoResolvedEntry[] = [];
+        for (const group of automaticGroups) {
+          automaticFlat.push(...group.entries);
+        }
+        resolvedForRendering = dedupeSeeAlsoEntries([...explicitEntries, ...automaticFlat]);
+      } else {
+        // Legacy behavior: merge explicit entries and automatic suggestions into one flat list.
+        resolvedForRendering = dedupeSeeAlsoEntries([
           ...resolved,
-          ...buildTagDerivedSeeAlsoEntries(
-            active,
-            this.app.metadataCache,
-            this.app.vault.getMarkdownFiles()
-          ),
-        ])
-      : resolved;
+          ...buildTagDerivedSeeAlsoEntries(active, this.app.metadataCache, markdownFiles),
+        ]);
+      }
+    }
 
     if (token !== this.renderToken) return;
 
-    const renderedFromTemplate = await this.renderTemplate(
-      root,
-      active,
-      withAutomaticSuggestions,
-      token
-    );
-    if (token !== this.renderToken) return;
-    if (renderedFromTemplate) return;
-
-    this.renderManual(root, withAutomaticSuggestions);
+    this.renderManual(root, resolvedForRendering, explicitEntries, automaticGroups);
   }
 
-  private async renderTemplate(
-    root: HTMLElement,
-    activeFile: TFile,
-    resolved: SeeAlsoResolvedEntry[],
-    token: number
-  ): Promise<boolean> {
-    const templatePath = this.deps.getTemplatePath().trim();
-    if (!templatePath) return false;
-
-    let template: string | null;
-    try {
-      template = await this.deps.templateEngine.loadTemplateContent();
-    } catch (error) {
-      console.error("[see-also-sidebar] Failed to load template", error);
-      return false;
-    }
-
-    if (!template) return false;
-    if (token !== this.renderToken) return true;
-
-    const context = buildTemplateContext(activeFile, this.app.metadataCache, resolved);
-    const markdown = this.deps.templateEngine.render(
-      template,
-      context as unknown as Record<string, unknown>
-    );
-
-    root.empty();
-    await MarkdownRenderer.render(this.app, markdown, root, activeFile.path, this);
-    if (token !== this.renderToken) return true;
-
-    const renderedLinks = root.querySelectorAll("a.internal-link, a[data-href]");
-    for (const link of Array.from(renderedLinks)) {
-      const rawTarget = link.getAttribute("data-href") ?? link.getAttribute("href") ?? "";
-      const normalizedTarget = this.normalizeLinkTarget(rawTarget);
-      if (!normalizedTarget) continue;
-
-      const anchor = link.ownerDocument.createElement("a");
-      anchor.className = "see-also-link";
-      anchor.setAttribute(TARGET_ATTR, normalizedTarget);
-      anchor.setAttribute("href", "#");
-      anchor.textContent = link.textContent ?? "";
-      link.replaceWith(anchor);
-    }
-    return true;
+  private getResolvedHeadingText(): string {
+    const raw = this.deps.getSidebarHeadingText();
+    const normalized = typeof raw === "string" ? raw.trim() : "";
+    return normalized.length > 0 ? normalized : "See also";
   }
 
   private renderManual(
     root: HTMLElement,
-    resolved: SeeAlsoResolvedEntry[]
+    resolved: SeeAlsoResolvedEntry[],
+    explicit: SeeAlsoResolvedEntry[],
+    automaticGroups: SeeAlsoSuggestionGroup[] | null
   ): void {
     root.empty();
-    root.createEl("h3", { text: "See also" });
+    root.createEl("h3", { text: this.getResolvedHeadingText() });
+
+    if (automaticGroups && automaticGroups.length > 0) {
+      const totalAutomatic = automaticGroups.reduce((sum, g) => sum + g.entries.length, 0);
+      const hasExplicit = explicit.length > 0;
+
+      if (!hasExplicit && totalAutomatic === 0) {
+        root.createEl("p", {
+          text: "No related notes found",
+          cls: "see-also-empty",
+        });
+        return;
+      }
+
+      if (hasExplicit) {
+        root.createEl("h4", { text: "Custom", cls: "see-also-custom-header" });
+        const ul = root.createEl("ul");
+        for (const entry of explicit) {
+          const li = ul.createEl("li");
+          const normalizedTarget = this.getNavigationTarget(entry);
+          if (!normalizedTarget) continue;
+
+          li.createEl("a", {
+            text: entry.display,
+            cls: "see-also-link",
+            href: "#",
+            attr: {
+              [TARGET_ATTR]: normalizedTarget,
+              role: "link",
+              tabindex: "0",
+            },
+          });
+        }
+      }
+
+      if (automaticGroups.length > 0) {
+        for (const group of automaticGroups) {
+          root.createEl("h5", { text: group.header, cls: "see-also-group-header" });
+          const ul = root.createEl("ul");
+          for (const entry of group.entries) {
+            const li = ul.createEl("li");
+            const normalizedTarget = this.getNavigationTarget(entry);
+            if (!normalizedTarget) continue;
+
+            li.createEl("a", {
+              text: entry.display,
+              cls: "see-also-link",
+              href: "#",
+              attr: {
+                [TARGET_ATTR]: normalizedTarget,
+                role: "link",
+                tabindex: "0",
+              },
+            });
+          }
+        }
+      }
+
+      return;
+    }
 
     if (resolved.length === 0) {
       root.createEl("p", {
@@ -222,8 +255,7 @@ export class SeeAlsoView extends ItemView {
 
     for (const entry of resolved) {
       const li = ul.createEl("li");
-      const target = entry.path || entry.linkpath || entry.display;
-      const normalizedTarget = this.normalizeLinkTarget(target);
+      const normalizedTarget = this.getNavigationTarget(entry);
       if (!normalizedTarget) continue;
 
       li.createEl("a", {
@@ -287,6 +319,19 @@ export class SeeAlsoView extends ItemView {
 
     normalized = normalized.replace(/^\/+/, "").replace(/\\/g, "/").trim();
     return normalized;
+  }
+
+  private getNavigationTarget(entry: SeeAlsoResolvedEntry): string {
+    if (entry.path) return entry.path;
+
+    const normalizedLinkpath = this.normalizeLinkTarget(entry.linkpath);
+    if (!normalizedLinkpath) return "";
+
+    const sourcePath = this.currentSourcePath ?? this.app.workspace.getActiveFile()?.path ?? "";
+    if (!sourcePath) return normalizedLinkpath;
+
+    const resolved = this.resolveExistingTargetFile(normalizedLinkpath, sourcePath);
+    return resolved?.path ?? normalizedLinkpath;
   }
 }
 
