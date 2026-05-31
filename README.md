@@ -39,7 +39,7 @@ It is useful for:
 - Ribbon icon to toggle/open the sidebar
 - Optional default behavior to open related notes in a new tab
 - Optional automatic suggestions based on shared tags (off by default)
-- Graceful fallback to a default list if no template is configured ✨
+- Graceful fallback to a default list if no template is configured
 
 ## Installation
 
