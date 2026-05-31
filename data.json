@@ -1,5 +1,6 @@
 {
-  "templatePath": "Templates/see-also-template.md",
+  "sidebarHeadingText": "Related",
   "openInNewTabByDefault": true,
-  "automaticSuggestions": false
+  "automaticSuggestions": true,
+  "groupAutomaticSuggestionsByTag": true
 }
