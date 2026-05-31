@@ -10,10 +10,12 @@ import {
 
 export interface SeeAlsoSettings {
   templatePath: string;
+  openInNewTabByDefault: boolean;
 }
 
 export const DEFAULT_SETTINGS: SeeAlsoSettings = {
   templatePath: "",
+  openInNewTabByDefault: false,
 };
 
 class TemplateFileSuggestModal extends FuzzySuggestModal<TFile> {
@@ -99,6 +101,18 @@ export class SeeAlsoSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
           this.display();
         });
+      });
+
+    new Setting(containerEl)
+      .setName("Open links in new tab")
+      .setDesc("When enabled, clicking a related note opens it in a new tab by default.")
+      .addToggle((toggle) => {
+        toggle
+          .setValue(this.plugin.settings.openInNewTabByDefault)
+          .onChange(async (value) => {
+            this.plugin.settings.openInNewTabByDefault = value;
+            await this.plugin.saveSettings();
+          });
       });
   }
 }

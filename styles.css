@@ -25,6 +25,15 @@
 .see-also-item .internal-link:hover {
   text-decoration: underline;
 }
+.see-also-link {
+  font-size: var(--font-ui-medium);
+  color: var(--link-color);
+  text-decoration: none;
+  cursor: pointer;
+}
+.see-also-link:hover {
+  text-decoration: underline;
+}
 .see-also-empty {
   color: var(--text-faint);
   font-style: italic;

@@ -10,7 +10,7 @@ Thumbs.db
 
 # IDE settings
 # Uncomment to ignore local VS Code settings
-# .vscode/
+.vscode/
 .idea/
 
 # Logs
@@ -28,5 +28,3 @@ coverage/
 *.tmp
 *.swp
 *~
-
-.vscode/

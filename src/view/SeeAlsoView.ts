@@ -1,11 +1,11 @@
-import { Component, ItemView, MarkdownRenderer, WorkspaceLeaf } from "obsidian";
-
-import { parseSeeAlso, resolveSeeAlsoEntries, buildTemplateContext } from "../seeAlso/resolve";
+import { ItemView, WorkspaceLeaf } from "obsidian";
+import { parseSeeAlso, resolveSeeAlsoEntries } from "../seeAlso/resolve";
 import type { TemplateEngine } from "../template/templateEngine";
 
 export interface SeeAlsoViewDeps {
   templateEngine: TemplateEngine;
   getTemplatePath: () => string;
+  getOpenInNewTabByDefault: () => boolean;
 }
 
 const VIEW_TYPE = "see-also-sidebar";
@@ -13,7 +13,7 @@ const VIEW_TYPE = "see-also-sidebar";
 export class SeeAlsoView extends ItemView {
   private notes: string[] = [];
   private renderToken = 0;
-  private markdownComponent: Component | null = null;
+  private lastMainLeaf: WorkspaceLeaf | null = null;
 
   constructor(leaf: WorkspaceLeaf, private readonly deps: SeeAlsoViewDeps) {
     super(leaf);
@@ -32,11 +32,20 @@ export class SeeAlsoView extends ItemView {
   }
 
   async onOpen(): Promise<void> {
+    // Watch for active-leaf changes, but only record the leaf if it's in
+    // the root split (main editor area) — never a sidebar leaf.
+    this.registerEvent(
+      this.app.workspace.on("active-leaf-change", (leaf) => {
+        if (leaf && this.isInRootSplit(leaf)) {
+          this.lastMainLeaf = leaf;
+        }
+      })
+    );
     await this.refresh();
   }
 
   async onClose(): Promise<void> {
-    this.unloadMarkdownComponent();
+    // No-op for now; kept for lifecycle symmetry.
   }
 
   update(notes: string[]): void {
@@ -45,121 +54,136 @@ export class SeeAlsoView extends ItemView {
   }
 
   async refresh(): Promise<void> {
-    const token = ++this.renderToken;
-
-    const root = this.containerEl.children[1] as HTMLElement;
-    root.empty();
-    root.addClass("see-also-root");
-
     const active = this.app.workspace.getActiveFile();
     if (!active) {
-      root.createEl("p", { text: "No active note.", cls: "see-also-empty" });
+      this.containerEl.empty();
       return;
     }
 
     const cache = this.app.metadataCache.getFileCache(active);
-    const raw: unknown = cache?.frontmatter?.["see-also"];
-    const notes = parseSeeAlso(raw);
+    const seeAlsoValue: unknown = cache?.frontmatter?.["see-also"] as unknown;
+    const notes = parseSeeAlso(seeAlsoValue);
     this.notes = notes;
 
-    const templatePath = this.deps.getTemplatePath().trim();
+    this.renderToken++;
+    const token = this.renderToken;
 
-    if (!templatePath) {
-      this.renderLegacy(root, notes);
-      return;
-    }
+    const root = this.containerEl;
+    root.empty();
+    root.addClass("see-also-root");
 
-    this.deps.templateEngine.setTemplatePath(templatePath);
-
-    let templateContent: string;
-    try {
-      const loaded = await this.deps.templateEngine.loadTemplateContent();
-      if (token !== this.renderToken) return;
-
-      if (!loaded) {
-        this.renderLegacy(root, notes);
-        return;
-      }
-      templateContent = loaded;
-    } catch (err) {
-      root.createEl("p", {
-        text: `Template error: ${err instanceof Error ? err.message : String(err)}`,
-        cls: "see-also-empty",
-      });
-      this.renderLegacy(root, notes);
-      return;
-    }
-
-    try {
-      const resolved = await resolveSeeAlsoEntries(
-        notes,
-        active.path,
-        this.app.metadataCache
-      );
-      if (token !== this.renderToken) return;
-
-      const ctx = buildTemplateContext(active, this.app.metadataCache, resolved);
-      const renderedMarkdown = this.deps.templateEngine.render(templateContent, ctx as unknown as Record<string, unknown>);
-
-      if (token !== this.renderToken) return;
-
-      this.unloadMarkdownComponent();
-      this.markdownComponent = new Component();
-      this.addChild(this.markdownComponent);
-
-      await MarkdownRenderer.render(this.app, renderedMarkdown, root, active.path, this.markdownComponent);
-    } catch (err) {
-      root.createEl("p", {
-        text: `Template render failed: ${err instanceof Error ? err.message : String(err)}`,
-        cls: "see-also-empty",
-      });
-      this.renderLegacy(root, notes);
-    }
+    await this.renderManual(root, notes, active.path, token);
   }
 
-  private unloadMarkdownComponent(): void {
-    if (!this.markdownComponent) return;
-    this.markdownComponent.unload();
-    this.markdownComponent = null;
+  // Walk up the parent chain to check if this leaf lives in the root
+  // (main editor) split rather than a left/right sidebar split.
+  private isInRootSplit(leaf: WorkspaceLeaf): boolean {
+    let node: unknown = (leaf as WorkspaceLeaf & { parent?: unknown }).parent;
+    while (node) {
+      if (node === this.app.workspace.rootSplit) return true;
+      if (typeof node !== "object") return false;
+      node = (node as { parent?: unknown }).parent ?? null;
+    }
+    return false;
   }
 
-  private renderLegacy(root: HTMLElement, notes: string[]): void {
-    if (notes.length === 0) {
-      root.createEl("p", { text: "No related notes.", cls: "see-also-empty" });
+  // Return the leaf we should navigate into.
+  // Priority: new tab (modifier held) → last tracked main leaf → any root
+  // leaf → new tab as last resort.
+  private getTargetLeaf(newTab: boolean): WorkspaceLeaf {
+    if (newTab) {
+      return this.app.workspace.getLeaf("tab");
+    }
+
+    if (this.lastMainLeaf) {
+      return this.lastMainLeaf;
+    }
+    // Fallback: grab the first leaf iterateRootLeaves finds.
+    let fallback: WorkspaceLeaf | null = null;
+    this.app.workspace.iterateRootLeaves((leaf) => {
+      if (!fallback) fallback = leaf;
+    });
+
+    if (fallback) {
+      return fallback;
+    }
+
+    // Last resort when no root leaf can be found.
+    return this.app.workspace.getLeaf(newTab ? "tab" : false);
+  }
+
+  private captureMainLeafBeforeClick(): void {
+    const candidate = this.app.workspace.getLeaf(false);
+    if (candidate === this.leaf) return;
+    if (!this.isInRootSplit(candidate)) return;
+    this.lastMainLeaf = candidate;
+  }
+
+  private async renderManual(
+    root: HTMLElement,
+    notes: string[],
+    sourcePath: string,
+    token: number
+  ): Promise<void> {
+    const resolved = await resolveSeeAlsoEntries(
+      notes,
+      sourcePath,
+      this.app.metadataCache
+    );
+
+    if (token !== this.renderToken) return;
+
+    root.empty();
+    root.createEl("h3", { text: "See also" });
+
+    if (resolved.length === 0) {
+      root.createEl("p", {
+        text: "No related notes found",
+        cls: "see-also-empty",
+      });
       return;
     }
 
-    root.createEl("p", { text: "See also", cls: "see-also-heading" });
-    const ul = root.createEl("ul", { cls: "see-also-list" });
+    const ul = root.createEl("ul");
 
-    for (const raw of notes) {
-      const stripped = raw.replace(/^\[\[|\]\]$/g, "").trim();
-      const idx = stripped.indexOf("|");
-      const notePath = (idx === -1 ? stripped : stripped.slice(0, idx)).trim();
-      const alias = idx === -1 ? null : stripped.slice(idx + 1).trim();
-      const displayText = alias && alias.length > 0 ? alias : notePath;
-
-      const li = ul.createEl("li", { cls: "see-also-item" });
+    for (const entry of resolved) {
+      const li = ul.createEl("li");
       const a = li.createEl("a", {
-        text: displayText,
-        cls: "internal-link",
-        href: notePath,
-      });
-      a.dataset.href = notePath;
-
-      a.addEventListener("click", (e) => {
-        e.preventDefault();
-        void this.app.workspace.openLinkText(notePath, "", false);
+        text: entry.display,
+        cls: "see-also-link",
       });
 
-      a.addEventListener("mouseover", (e) => {
-        this.app.workspace.trigger("hover-link", {
-          event: e,
-          source: VIEW_TYPE,
-          hoverParent: this,
-          targetEl: a,
-          linktext: notePath,
-        });
+      // Capture the currently active main-area leaf before this sidebar
+      // click shifts focus to the sidebar leaf.
+      a.addEventListener("mousedown", () => {
+        this.captureMainLeafBeforeClick();
+      });
+
+      a.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+
+        this.captureMainLeafBeforeClick();
+
+        const file = this.app.metadataCache.getFirstLinkpathDest(
+          entry.linkpath,
+          sourcePath
+        );
+        if (!file) return;
+
+        const newTab =
+          this.deps.getOpenInNewTabByDefault() || event.ctrlKey || event.metaKey;
+        const targetLeaf = this.getTargetLeaf(newTab);
+        void targetLeaf.openFile(file);
+      });
+
+      a.setAttribute("role", "button");
+      a.setAttribute("tabindex", "0");
+
+      a.addEventListener("keydown", (event: KeyboardEvent) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        a.click();
       });
     }
   }

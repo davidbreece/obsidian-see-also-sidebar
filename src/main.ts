@@ -7,15 +7,25 @@ import { SeeAlsoView, SEE_ALSO_VIEW_TYPE } from "./view/SeeAlsoView";
 export default class SeeAlsoPlugin extends Plugin {
   settings: SeeAlsoSettings = DEFAULT_SETTINGS;
   private templateEngine!: TemplateEngine;
+  private lastRefreshedActivePath: string | null = null;
+
+  private getOpenInNewTabByDefault(): boolean {
+    return this.settings.openInNewTabByDefault === true;
+  }
 
   private parseSettings(data: unknown): Partial<SeeAlsoSettings> {
     if (!data || typeof data !== "object") return {};
     const record = data as Record<string, unknown>;
 
     const templatePath = typeof record.templatePath === "string" ? record.templatePath : undefined;
+    const openInNewTabByDefault =
+      typeof record.openInNewTabByDefault === "boolean"
+        ? record.openInNewTabByDefault
+        : undefined;
 
     return {
       templatePath,
+      openInNewTabByDefault,
     };
   }
 
@@ -35,6 +45,7 @@ export default class SeeAlsoPlugin extends Plugin {
       new SeeAlsoView(leaf, {
         templateEngine: this.templateEngine,
         getTemplatePath: () => this.settings.templatePath,
+        getOpenInNewTabByDefault: () => this.getOpenInNewTabByDefault(),
       })
     );
 
@@ -44,9 +55,12 @@ export default class SeeAlsoPlugin extends Plugin {
       void this.activateView();
     });
 
-    // Refresh when you switch notes
+    // Refresh when the active note actually changes.
     this.registerEvent(
       this.app.workspace.on("active-leaf-change", () => {
+        const activePath = this.app.workspace.getActiveFile()?.path ?? null;
+        if (activePath === this.lastRefreshedActivePath) return;
+        this.lastRefreshedActivePath = activePath;
         void this.refresh();
       })
     );
@@ -112,6 +126,7 @@ export default class SeeAlsoPlugin extends Plugin {
       await leaf.setViewState({ type: SEE_ALSO_VIEW_TYPE, active: true });
     }
     await workspace.revealLeaf(leaf);
+    this.lastRefreshedActivePath = this.app.workspace.getActiveFile()?.path ?? null;
     await this.refresh();
   }
 

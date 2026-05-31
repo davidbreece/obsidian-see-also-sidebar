@@ -104,7 +104,7 @@ export async function resolveSeeAlsoEntries(
     const { linktext, alias } = splitAlias(stripped);
     const { linkpath, subpath } = splitSubpath(linktext);
 
-    const display = alias ?? linktext;
+    let display = alias ?? linktext;
 
     const dest = linkpath ? metadataCache.getFirstLinkpathDest(linkpath, sourcePath) : null;
     const exists = dest instanceof TFile;
@@ -121,6 +121,13 @@ export async function resolveSeeAlsoEntries(
       }
     }
 
+    // Smart fallback: use title if no explicit alias
+    let useDisplayText = alias !== null;
+    if (alias === null && typeof frontmatter?.title === "string") {
+      display = frontmatter.title;
+      useDisplayText = true; // Include display text since we're using title
+    }
+
     const wikilinkTarget = resolvedPath ?? linktext;
 
     out.push({
@@ -132,7 +139,7 @@ export async function resolveSeeAlsoEntries(
       exists,
       path: resolvedPath,
       title,
-      wikilink: buildWikilink(wikilinkTarget, subpath, display, alias !== null),
+      wikilink: buildWikilink(wikilinkTarget, subpath, display, useDisplayText),
       frontmatter,
     });
   }

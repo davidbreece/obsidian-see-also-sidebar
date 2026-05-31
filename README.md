@@ -37,6 +37,7 @@ It is useful for:
 - Auto-refresh when active note or metadata changes
 - Support for multiple `see-also` note formats
 - Ribbon icon to toggle/open the sidebar
+- Optional default behavior to open related notes in a new tab
 - Graceful fallback to a default list if no template is configured ✨
 
 ## Installation
@@ -191,6 +192,7 @@ Available settings:
 | Template file | Vault-relative path to a Markdown template file |
 | Browse button | Opens a file picker for Markdown notes in your vault |
 | Clear button | Removes the template path and returns to default rendering |
+| Open links in new tab | Opens related-note links in a new tab without requiring Ctrl/Cmd-click |
 
 ## Examples
 
