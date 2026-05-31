@@ -143,6 +143,7 @@ The sidebar can render using a custom Markdown template and Mustache variables.
 1. Open **Settings -> Community plugins -> See Also Sidebar**.
 2. In **Template file**, provide a vault-relative path (for example: `Templates/see-also.md`).
 3. You can also use **Browse** to pick a Markdown file.
+4. Use **Clear** to reset the setting and return to default list rendering.
 
 ### Create a template note
 
@@ -199,15 +200,20 @@ Settings location:
 
 - **Settings -> Community plugins -> See Also Sidebar**
 
-Available settings:
+### Settings reference
 
-| Setting | Purpose |
-| --- | --- |
-| Template file | Vault-relative path to a Markdown template file |
-| Browse button | Opens a file picker for Markdown notes in your vault |
-| Clear button | Removes the template path and returns to default rendering |
-| Open links in new tab | Opens related-note links in a new tab without requiring Ctrl/Cmd-click |
-| Automatic suggestions | Adds notes that share tags with the active note; off by default |
+| Setting | Type | Default | What it does |
+| --- | --- | --- | --- |
+| Template file | String path | Empty (`""`) | Vault-relative path to a Markdown template note used for Mustache-based rendering. When empty, the plugin uses the default built-in list view. |
+| Open links in new tab | Boolean | `false` | When enabled, related-note clicks open in a new tab by default. Users can still use Ctrl/Cmd-click or middle-click as usual. |
+| Automatic suggestions | Boolean | `false` | When enabled, the sidebar appends notes that share tags with the active note in addition to explicit `see-also` entries. |
+
+### Template file controls
+
+The settings UI for **Template file** includes two convenience controls:
+
+- **Browse**: opens a Markdown file picker and writes the selected file path to `Template file`.
+- **Clear**: empties `Template file`, which switches rendering back to the default list view.
 
 ## Examples
 
