@@ -5,7 +5,7 @@ Display related notes from frontmatter in a dedicated sidebar view.
 | Field | Value |
 | --- | --- |
 | Author | David Breece |
-| Version | 1.1.0 |
+| Version | 1.2.0 |
 | Minimum Obsidian version | 1.7.2 |
 
 ## Table of contents
