@@ -31,5 +31,4 @@ coverage/
 
 ## plugin-specific state
 data.json
-main.js
 settings.json
