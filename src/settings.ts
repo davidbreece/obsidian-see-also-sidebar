@@ -1,15 +1,33 @@
 import {
   App,
+  Notice,
   Plugin,
   PluginSettingTab,
   Setting,
 } from "obsidian";
+
+const DEFAULT_CUSTOM_GROUP_LABEL = "Custom";
+
+export function sanitizeCustomGroupLabel(raw: unknown): string {
+  const input = typeof raw === "string" ? raw : "";
+
+  // Spec:
+  // 1) Trim whitespace
+  // 2) Remove all non-alphanumeric (A-Z, a-z, 0-9)
+  // 3) Truncate to 255 chars
+  // 4) Fall back to DEFAULT_CUSTOM_GROUP_LABEL if empty
+  let value = input.trim();
+  value = value.replace(/[^A-Za-z0-9]/g, "");
+  if (value.length > 255) value = value.slice(0, 255);
+  return value.length > 0 ? value : DEFAULT_CUSTOM_GROUP_LABEL;
+}
 
 export interface SeeAlsoSettings {
   sidebarHeadingText: string;
   openInNewTabByDefault: boolean;
   automaticSuggestions: boolean;
   groupAutomaticSuggestionsByTag: boolean;
+  customGroupLabel: string;
 }
 
 export const DEFAULT_SETTINGS: SeeAlsoSettings = {
@@ -17,6 +35,7 @@ export const DEFAULT_SETTINGS: SeeAlsoSettings = {
   openInNewTabByDefault: false,
   automaticSuggestions: false,
   groupAutomaticSuggestionsByTag: true,
+  customGroupLabel: DEFAULT_CUSTOM_GROUP_LABEL,
 };
 
 export class SeeAlsoSettingTab extends PluginSettingTab {
@@ -85,6 +104,43 @@ export class SeeAlsoSettingTab extends PluginSettingTab {
             this.plugin.settings.groupAutomaticSuggestionsByTag = value;
             await this.plugin.saveSettings();
           });
+      });
+
+    new Setting(containerEl)
+      .setName("Custom group label")
+      .setDesc(
+        "Label for grouped links that don't match a specific tag. Uses alphanumeric characters only (a-z, 0-9). Maximum 255 characters."
+      )
+      .addText((text) => {
+        text
+          .setPlaceholder(DEFAULT_CUSTOM_GROUP_LABEL)
+          .setValue(this.plugin.settings.customGroupLabel)
+          // Keep input responsive while typing; sanitize on blur.
+          .onChange((value) => {
+            this.plugin.settings.customGroupLabel = value;
+          });
+
+        text.inputEl.addEventListener("blur", () => {
+          void (async () => {
+            const raw = text.getValue();
+            const sanitized = sanitizeCustomGroupLabel(raw);
+
+            if (sanitized !== raw) {
+              new Notice(`Custom group label was sanitized to: ${sanitized}`);
+            }
+
+            if (this.plugin.settings.customGroupLabel !== sanitized) {
+              this.plugin.settings.customGroupLabel = sanitized;
+            }
+
+            // Ensure the UI reflects the persisted, sanitized value.
+            if (text.getValue() !== sanitized) {
+              text.setValue(sanitized);
+            }
+
+            await this.plugin.saveSettings();
+          })();
+        });
       });
   }
 }

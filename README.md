@@ -100,7 +100,7 @@ Behavior details:
 
 - Explicit `see-also` entries are always included.
 - With grouping disabled, automatic suggestions are merged into one flat list.
-- With grouping enabled, explicit entries are rendered under **Custom**, and automatic entries are rendered directly under tag headers.
+- With grouping enabled, explicit entries are rendered under the configured **Custom group label**, and automatic entries are rendered directly under tag headers.
 - In grouped mode, there is no intermediate **Suggestions** heading.
 - The active note is never included in automatic suggestions.
 - Duplicate notes are shown only once.
@@ -118,7 +118,8 @@ Settings location:
 | Sidebar heading text | String | `See also` | Text used as the sidebar heading. Empty or whitespace values fall back to `See also`. |
 | Open links in new tab | Boolean | `false` | When enabled, related-note clicks open in a new tab by default. Ctrl/Cmd-click and middle-click still open in a new tab. |
 | Automatic suggestions | Boolean | `false` | When enabled, the sidebar also includes notes that share tags with the active note. |
-| Group automatic suggestions by tag | Boolean | `true` | When enabled (and automatic suggestions is on), grouped mode shows **Custom** followed by tag-based sections. |
+| Group automatic suggestions by tag | Boolean | `true` | When enabled (and automatic suggestions is on), grouped mode shows the configured **Custom group label** followed by tag-based sections. |
+| Custom group label | String | `Custom` | Label used for explicit `see-also` entries in grouped mode. Non-alphanumeric characters are removed; empty values fall back to `Custom`. |
 
 ## Development
 

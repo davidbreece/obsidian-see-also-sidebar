@@ -1,6 +1,11 @@
 import { Plugin, TFile } from "obsidian";
 
-import { DEFAULT_SETTINGS, type SeeAlsoSettings, SeeAlsoSettingTab } from "./settings";
+import {
+  DEFAULT_SETTINGS,
+  sanitizeCustomGroupLabel,
+  type SeeAlsoSettings,
+  SeeAlsoSettingTab,
+} from "./settings";
 import { SeeAlsoView, SEE_ALSO_VIEW_TYPE } from "./view/SeeAlsoView";
 
 export default class SeeAlsoPlugin extends Plugin {
@@ -37,6 +42,10 @@ export default class SeeAlsoPlugin extends Plugin {
     if (typeof record.groupAutomaticSuggestionsByTag === "boolean") {
       parsed.groupAutomaticSuggestionsByTag = record.groupAutomaticSuggestionsByTag;
     }
+    if (typeof record.customGroupLabel === "string") {
+      // Store only the normalized value so the view can depend on it.
+      parsed.customGroupLabel = sanitizeCustomGroupLabel(record.customGroupLabel);
+    }
 
     return parsed;
   }
@@ -57,6 +66,7 @@ export default class SeeAlsoPlugin extends Plugin {
         getOpenInNewTabByDefault: () => this.getOpenInNewTabByDefault(),
         getAutomaticSuggestionsEnabled: () => this.getAutomaticSuggestionsEnabled(),
         getGroupAutomaticSuggestionsByTagEnabled: () => this.getGroupAutomaticSuggestionsByTagEnabled(),
+        getCustomGroupLabel: () => sanitizeCustomGroupLabel(this.settings.customGroupLabel),
       })
     );
 

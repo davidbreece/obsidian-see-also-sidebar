@@ -14,6 +14,7 @@ export interface SeeAlsoViewDeps {
   getOpenInNewTabByDefault: () => boolean;
   getAutomaticSuggestionsEnabled: () => boolean;
   getGroupAutomaticSuggestionsByTagEnabled: () => boolean;
+  getCustomGroupLabel: () => string;
 }
 
 const VIEW_TYPE = "see-also-sidebar";
@@ -197,7 +198,12 @@ export class SeeAlsoView extends ItemView {
       }
 
       if (hasExplicit) {
-        root.createEl("h4", { text: "Custom", cls: "see-also-custom-header" });
+        const rawCustomLabel = this.deps.getCustomGroupLabel();
+        const customLabel = typeof rawCustomLabel === "string" ? rawCustomLabel.trim() : "";
+        root.createEl("h4", {
+          text: customLabel.length > 0 ? customLabel : "Custom",
+          cls: "see-also-custom-header",
+        });
         const ul = root.createEl("ul");
         for (const entry of explicit) {
           const li = ul.createEl("li");
