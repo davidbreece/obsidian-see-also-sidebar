@@ -31,4 +31,5 @@ coverage/
 
 ## plugin-specific state
 data.json
-settings.json
+settings.json# Build artifacts
+main.js
