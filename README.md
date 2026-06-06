@@ -23,6 +23,8 @@ Display related notes from frontmatter in a dedicated sidebar view.
 
 See Also Sidebar reads a `see-also` property from the active note frontmatter and renders related notes in a sidebar panel.
 
+> **📋 Data Access Notice**: This plugin includes an optional "Automatic suggestions" feature that, when enabled, reads the list of all markdown files in your vault to find notes with shared tags. This feature is **disabled by default** and all processing is local—no data leaves your device. See [Privacy & Data Access](#privacy--data-access) for details.
+
 ## Features
 
 - Sidebar view for related notes

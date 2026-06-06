@@ -139,6 +139,11 @@ export class SeeAlsoView extends ItemView {
     let automaticGroups: SeeAlsoSuggestionGroup[] | null = null;
 
     if (this.deps.getAutomaticSuggestionsEnabled()) {
+      // DATA ACCESS: Vault-wide file enumeration (opt-in only, disabled by default)
+      // Required for "Automatic suggestions" feature to find notes with shared tags.
+      // This is documented in README under "Privacy & Data Access" section.
+      // Only reads file paths and metadata, not file contents.
+      // All processing is local; no data leaves the device.
       const markdownFiles = this.app.vault.getMarkdownFiles();
 
       if (this.deps.getGroupAutomaticSuggestionsByTagEnabled()) {
