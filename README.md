@@ -15,6 +15,7 @@ Display related notes from frontmatter in a dedicated sidebar view.
 - [Installation](#installation)
 - [Usage](#usage)
 - [Configuration](#configuration)
+- [Privacy & Data Access](#privacy--data-access)
 - [Development](#development)
 - [License](#license)
 
@@ -120,6 +121,29 @@ Settings location:
 | Automatic suggestions | Boolean | `false` | When enabled, the sidebar also includes notes that share tags with the active note. |
 | Group automatic suggestions by tag | Boolean | `true` | When enabled (and automatic suggestions is on), grouped mode shows the configured **Custom group label** followed by tag-based sections. |
 | Custom group label | String | `Custom` | Label used for explicit `see-also` entries in grouped mode. Non-alphanumeric characters are removed; empty values fall back to `Custom`. |
+
+## Privacy & Data Access
+
+This plugin operates locally within your vault and does not send data to external services.
+
+### Vault file enumeration
+
+**When automatic suggestions are enabled**, the plugin accesses the list of all markdown files in your vault using `vault.getMarkdownFiles()`. This is necessary to:
+
+- Find notes that share tags with the active note
+- Build automatic suggestions based on tag relationships
+
+This enumeration:
+
+- Only occurs when **Automatic suggestions** is enabled in settings (disabled by default)
+- Reads file paths and metadata, not file contents
+- Processes data locally; no information leaves your device
+- Can be completely avoided by keeping automatic suggestions disabled
+
+When automatic suggestions are disabled, the plugin only accesses:
+
+- The active note's frontmatter
+- Files explicitly listed in the `see-also` property
 
 ## Development
 
