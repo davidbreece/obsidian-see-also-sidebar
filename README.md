@@ -140,6 +140,7 @@ This enumeration:
 - Only occurs when **Automatic suggestions** is enabled in settings (disabled by default)
 - Reads file paths and metadata, not file contents
 - Processes data locally; no information leaves your device
+- Makes no external network requests and does not transmit vault paths/content
 - Can be completely avoided by keeping automatic suggestions disabled
 
 When automatic suggestions are disabled, the plugin only accesses:

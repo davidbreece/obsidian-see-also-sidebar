@@ -81,7 +81,7 @@ export class SeeAlsoSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName("Automatic suggestions")
       .setDesc(
-        "When enabled, notes sharing tags with the active note are suggested in addition to explicit see-also notes."
+        "When enabled, the plugin scans Markdown file paths in your vault to find notes sharing tags with the active note. This is local only and disabled by default."
       )
       .addToggle((toggle) => {
         toggle
