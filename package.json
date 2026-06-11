@@ -1,6 +1,6 @@
 {
 	"name": "see-also-sidebar",
-	"version": "1.2.1",
+	"version": "1.2.2",
 	"description": "Display related notes in a sidebar view",
 	"main": "main.js",
 	"scripts": {
