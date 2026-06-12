@@ -5,8 +5,8 @@ Display related notes from frontmatter in a dedicated sidebar view.
 | Field | Value |
 | --- | --- |
 | Author | David Breece |
-| Version | 1.2.3 |
-| Minimum Obsidian version | 1.7.2 |
+| Version | 1.2.7 |
+| Minimum Obsidian version | 1.8.0 |
 
 ## Table of contents
 
@@ -49,9 +49,9 @@ This plugin is not yet in the Obsidian Community Plugins directory.
 <YourVault>/.obsidian/plugins/see-also-sidebar/
 ```
 
-3. Copy files into that folder.
-4. In Obsidian, go to **Settings -> Community plugins**.
-5. Enable **See Also Sidebar**.
+1. Copy files into that folder.
+2. In Obsidian, go to **Settings -> Community plugins**.
+3. Enable **See Also Sidebar**.
 
 ## Usage
 
