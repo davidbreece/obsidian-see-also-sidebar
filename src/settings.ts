@@ -3,7 +3,6 @@ import {
   Notice,
   Plugin,
   PluginSettingTab,
-  Setting,
 } from "obsidian";
 
 const DEFAULT_CUSTOM_GROUP_LABEL = "Custom";
@@ -50,97 +49,70 @@ export class SeeAlsoSettingTab extends PluginSettingTab {
   }
 
   display(): void {
-    const { containerEl } = this;
-    containerEl.empty();
+    // Intentionally empty. Obsidian 1.13.0+ uses getSettingDefinitions() instead.
+  }
 
-    new Setting(containerEl)
-      .setName("Sidebar heading text")
-      .setDesc("Text shown above related notes in the sidebar.")
-      .addText((text) => {
-        text
-          .setPlaceholder("See also")
-          .setValue(this.plugin.settings.sidebarHeadingText)
-          .onChange(async (value) => {
-            this.plugin.settings.sidebarHeadingText = value;
-            await this.plugin.saveSettings();
-          });
-      });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  getSettingDefinitions(): any[] {
+    const textControl = {
+      type: "text",
+      key: "sidebarHeadingText",
+      placeholder: "See also",
+    };
+    const toggleOpenNewTab = {
+      type: "toggle",
+      key: "openInNewTabByDefault",
+    };
+    const toggleAutoSuggestions = {
+      type: "toggle",
+      key: "automaticSuggestions",
+    };
+    const toggleGroupBytag = {
+      type: "toggle",
+      key: "groupAutomaticSuggestionsByTag",
+    };
+    const customLabelControl = {
+      type: "text",
+      key: "customGroupLabel",
+      placeholder: DEFAULT_CUSTOM_GROUP_LABEL,
+      validate: (value: string) => {
+        const sanitized = sanitizeCustomGroupLabel(value);
+        if (sanitized !== value) {
+          new Notice(`Custom group label was sanitized to: ${sanitized}`);
+          this.plugin.settings.customGroupLabel = sanitized;
+          void this.plugin.saveSettings();
+          return `Sanitized to: ${sanitized}`;
+        }
+        return undefined;
+      },
+    };
 
-    new Setting(containerEl)
-      .setName("Open links in new tab")
-      .setDesc("When enabled, clicking a related note opens it in a new tab by default.")
-      .addToggle((toggle) => {
-        toggle
-          .setValue(this.plugin.settings.openInNewTabByDefault)
-          .onChange(async (value) => {
-            this.plugin.settings.openInNewTabByDefault = value;
-            await this.plugin.saveSettings();
-          });
-      });
-
-    new Setting(containerEl)
-      .setName("Automatic suggestions")
-      .setDesc(
-        "When enabled, the plugin scans Markdown file paths in your vault to find notes sharing tags with the active note. This is local only and disabled by default."
-      )
-      .addToggle((toggle) => {
-        toggle
-          .setValue(this.plugin.settings.automaticSuggestions)
-          .onChange(async (value) => {
-            this.plugin.settings.automaticSuggestions = value;
-            await this.plugin.saveSettings();
-            this.display();
-          });
-      });
-
-    new Setting(containerEl)
-      .setName("Group automatic suggestions by tag")
-      .setDesc("When enabled, automatic suggestions can be grouped by their shared tag.")
-      .addToggle((toggle) => {
-        toggle
-          .setValue(this.plugin.settings.groupAutomaticSuggestionsByTag)
-          .setDisabled(!this.plugin.settings.automaticSuggestions)
-          .onChange(async (value) => {
-            this.plugin.settings.groupAutomaticSuggestionsByTag = value;
-            await this.plugin.saveSettings();
-          });
-      });
-
-    new Setting(containerEl)
-      .setName("Custom group label")
-      .setDesc(
-        "Label for grouped links that don't match a specific tag. Uses alphanumeric characters only (a-z, 0-9). Maximum 255 characters."
-      )
-      .addText((text) => {
-        text
-          .setPlaceholder(DEFAULT_CUSTOM_GROUP_LABEL)
-          .setValue(this.plugin.settings.customGroupLabel)
-          // Keep input responsive while typing; sanitize on blur.
-          .onChange((value) => {
-            this.plugin.settings.customGroupLabel = value;
-          });
-
-        text.inputEl.addEventListener("blur", () => {
-          void (async () => {
-            const raw = text.getValue();
-            const sanitized = sanitizeCustomGroupLabel(raw);
-
-            if (sanitized !== raw) {
-              new Notice(`Custom group label was sanitized to: ${sanitized}`);
-            }
-
-            if (this.plugin.settings.customGroupLabel !== sanitized) {
-              this.plugin.settings.customGroupLabel = sanitized;
-            }
-
-            // Ensure the UI reflects the persisted, sanitized value.
-            if (text.getValue() !== sanitized) {
-              text.setValue(sanitized);
-            }
-
-            await this.plugin.saveSettings();
-          })();
-        });
-      });
+    return [
+      {
+        name: "Sidebar heading text",
+        desc: "Text shown above related notes in the sidebar.",
+        control: textControl,
+      },
+      {
+        name: "Open links in new tab",
+        desc: "When enabled, clicking a related note opens it in a new tab by default.",
+        control: toggleOpenNewTab,
+      },
+      {
+        name: "Automatic suggestions",
+        desc: "When enabled, the plugin scans Markdown file paths in your vault to find notes sharing tags with the active note. This is local only and disabled by default.",
+        control: toggleAutoSuggestions,
+      },
+      {
+        name: "Group automatic suggestions by tag",
+        desc: "When enabled, automatic suggestions can be grouped by their shared tag.",
+        control: toggleGroupBytag,
+      },
+      {
+        name: "Custom group label",
+        desc: "Label for grouped links that don't match a specific tag. Uses alphanumeric characters only (a-z, 0-9). Maximum 255 characters.",
+        control: customLabelControl,
+      },
+    ] as any[]; // eslint-disable-line @typescript-eslint/no-explicit-any
   }
 }
