@@ -29,6 +29,24 @@ export interface SeeAlsoSettings {
   customGroupLabel: string;
 }
 
+type DeclarativeControl =
+  | {
+      type: "text";
+      key: keyof SeeAlsoSettings;
+      placeholder?: string;
+      validate?: (value: string) => string | undefined;
+    }
+  | {
+      type: "toggle";
+      key: keyof SeeAlsoSettings;
+    };
+
+interface DeclarativeSettingDefinition {
+  name: string;
+  desc?: string;
+  control: DeclarativeControl;
+}
+
 export const DEFAULT_SETTINGS: SeeAlsoSettings = {
   sidebarHeadingText: "See also",
   openInNewTabByDefault: false,
@@ -52,26 +70,25 @@ export class SeeAlsoSettingTab extends PluginSettingTab {
     // Intentionally empty. Obsidian 1.13.0+ uses getSettingDefinitions() instead.
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  getSettingDefinitions(): any[] {
-    const textControl = {
+  getSettingDefinitions(): DeclarativeSettingDefinition[] {
+    const textControl: DeclarativeControl = {
       type: "text",
       key: "sidebarHeadingText",
       placeholder: "See also",
     };
-    const toggleOpenNewTab = {
+    const toggleOpenNewTab: DeclarativeControl = {
       type: "toggle",
       key: "openInNewTabByDefault",
     };
-    const toggleAutoSuggestions = {
+    const toggleAutoSuggestions: DeclarativeControl = {
       type: "toggle",
       key: "automaticSuggestions",
     };
-    const toggleGroupBytag = {
+    const toggleGroupBytag: DeclarativeControl = {
       type: "toggle",
       key: "groupAutomaticSuggestionsByTag",
     };
-    const customLabelControl = {
+    const customLabelControl: DeclarativeControl = {
       type: "text",
       key: "customGroupLabel",
       placeholder: DEFAULT_CUSTOM_GROUP_LABEL,
@@ -113,6 +130,6 @@ export class SeeAlsoSettingTab extends PluginSettingTab {
         desc: "Label for grouped links that don't match a specific tag. Uses alphanumeric characters only (a-z, 0-9). Maximum 255 characters.",
         control: customLabelControl,
       },
-    ] as any[]; // eslint-disable-line @typescript-eslint/no-explicit-any
+    ];
   }
 }
