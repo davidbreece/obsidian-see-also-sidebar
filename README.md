@@ -5,7 +5,7 @@ Display related notes from frontmatter in a dedicated sidebar view.
 | Field | Value |
 | --- | --- |
 | Author | David Breece |
-| Version | 1.2.8 |
+| Version | 1.2.9 |
 | Minimum Obsidian version | 1.13.0 |
 
 ## Table of contents
@@ -38,7 +38,7 @@ See Also Sidebar reads a `see-also` property from the active note frontmatter an
 
 ## Installation
 
-This plugin is not yet in the Obsidian Community Plugins directory.
+This plugin is now in the Obsidian Community Plugins directory!
 
 ### Manual installation
 
