@@ -8,12 +8,14 @@ import {
   type SeeAlsoResolvedEntry,
   type SeeAlsoSuggestionGroup,
 } from "../seeAlso/resolve";
+import { type SeeAlsoListPosition } from "../settings";
 
 export interface SeeAlsoViewDeps {
   getSidebarHeadingText: () => string;
   getOpenInNewTabByDefault: () => boolean;
   getAutomaticSuggestionsEnabled: () => boolean;
   getGroupAutomaticSuggestionsByTagEnabled: () => boolean;
+  getCustomLinksPosition: () => SeeAlsoListPosition;
   getCustomGroupLabel: () => string;
 }
 
@@ -190,9 +192,16 @@ export class SeeAlsoView extends ItemView {
     root.empty();
     root.createEl("h3", { text: this.getResolvedHeadingText() });
 
-    if (automaticGroups && automaticGroups.length > 0) {
+    if (automaticGroups !== null) {
+      const rawPosition = this.deps.getCustomLinksPosition();
+      const customPosition =
+        rawPosition === "above" || rawPosition === "below" || rawPosition === "hidden"
+          ? rawPosition
+          : "above";
+
       const totalAutomatic = automaticGroups.reduce((sum, g) => sum + g.entries.length, 0);
-      const hasExplicit = explicit.length > 0;
+      const showExplicit = customPosition !== "hidden";
+      const hasExplicit = showExplicit && explicit.length > 0;
 
       if (!hasExplicit && totalAutomatic === 0) {
         root.createEl("p", {
@@ -202,13 +211,16 @@ export class SeeAlsoView extends ItemView {
         return;
       }
 
-      if (hasExplicit) {
+      const renderExplicitSection = (): void => {
+        if (!hasExplicit) return;
+
         const rawCustomLabel = this.deps.getCustomGroupLabel();
         const customLabel = typeof rawCustomLabel === "string" ? rawCustomLabel.trim() : "";
         root.createEl("h4", {
           text: customLabel.length > 0 ? customLabel : "Custom",
           cls: "see-also-custom-header",
         });
+
         const ul = root.createEl("ul");
         for (const entry of explicit) {
           const li = ul.createEl("li");
@@ -226,9 +238,9 @@ export class SeeAlsoView extends ItemView {
             },
           });
         }
-      }
+      };
 
-      if (automaticGroups.length > 0) {
+      const renderAutomaticGroups = (): void => {
         for (const group of automaticGroups) {
           root.createEl("h5", { text: group.header, cls: "see-also-group-header" });
           const ul = root.createEl("ul");
@@ -249,6 +261,14 @@ export class SeeAlsoView extends ItemView {
             });
           }
         }
+      };
+
+      if (customPosition === "below") {
+        renderAutomaticGroups();
+        renderExplicitSection();
+      } else {
+        renderExplicitSection();
+        renderAutomaticGroups();
       }
 
       return;

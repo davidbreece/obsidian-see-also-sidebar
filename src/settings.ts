@@ -3,9 +3,12 @@ import {
   Notice,
   Plugin,
   PluginSettingTab,
+  Setting,
 } from "obsidian";
 
 const DEFAULT_CUSTOM_GROUP_LABEL = "Custom";
+
+export type SeeAlsoListPosition = "above" | "below" | "hidden";
 
 export function sanitizeCustomGroupLabel(raw: unknown): string {
   const input = typeof raw === "string" ? raw : "";
@@ -26,6 +29,7 @@ export interface SeeAlsoSettings {
   openInNewTabByDefault: boolean;
   automaticSuggestions: boolean;
   groupAutomaticSuggestionsByTag: boolean;
+  customLinksPosition: SeeAlsoListPosition;
   customGroupLabel: string;
 }
 
@@ -39,11 +43,18 @@ type DeclarativeControl =
   | {
       type: "toggle";
       key: keyof SeeAlsoSettings;
+    }
+  | {
+      type: "dropdown";
+      key: keyof SeeAlsoSettings;
+      options: Record<string, string>;
+      defaultValue?: string;
     };
 
 interface DeclarativeSettingDefinition {
   name: string;
   desc?: string;
+  visible?: boolean | (() => boolean);
   control: DeclarativeControl;
 }
 
@@ -52,6 +63,7 @@ export const DEFAULT_SETTINGS: SeeAlsoSettings = {
   openInNewTabByDefault: false,
   automaticSuggestions: false,
   groupAutomaticSuggestionsByTag: true,
+  customLinksPosition: "above",
   customGroupLabel: DEFAULT_CUSTOM_GROUP_LABEL,
 };
 
@@ -67,10 +79,113 @@ export class SeeAlsoSettingTab extends PluginSettingTab {
   }
 
   display(): void {
-    // Intentionally empty. Obsidian 1.13.0+ uses getSettingDefinitions() instead.
+    const { containerEl } = this;
+    containerEl.empty();
+
+    new Setting(containerEl)
+      .setName("Sidebar heading text")
+      .setDesc("Text shown above related notes in the sidebar.")
+      .addText((text) => {
+        text
+          .setPlaceholder("See also")
+          .setValue(this.plugin.settings.sidebarHeadingText)
+          .onChange(async (value) => {
+            this.plugin.settings.sidebarHeadingText = value;
+            await this.plugin.saveSettings();
+          });
+      });
+
+    new Setting(containerEl)
+      .setName("Open links in new tab")
+      .setDesc("When enabled, clicking a related note opens it in a new tab by default.")
+      .addToggle((toggle) => {
+        toggle
+          .setValue(this.plugin.settings.openInNewTabByDefault)
+          .onChange(async (value) => {
+            this.plugin.settings.openInNewTabByDefault = value;
+            await this.plugin.saveSettings();
+          });
+      });
+
+    new Setting(containerEl)
+      .setName("Automatic suggestions")
+      .setDesc("When enabled, the plugin scans Markdown file paths in your vault to find notes sharing tags with the active note. This is local only and disabled by default.")
+      .addToggle((toggle) => {
+        toggle
+          .setValue(this.plugin.settings.automaticSuggestions)
+          .onChange(async (value) => {
+            this.plugin.settings.automaticSuggestions = value;
+            await this.plugin.saveSettings();
+            this.display();
+          });
+      });
+
+    new Setting(containerEl)
+      .setName("Group automatic suggestions by tag")
+      .setDesc("When enabled, automatic suggestions can be grouped by their shared tag.")
+      .addToggle((toggle) => {
+        toggle
+          .setValue(this.plugin.settings.groupAutomaticSuggestionsByTag)
+          .setDisabled(!this.plugin.settings.automaticSuggestions)
+          .onChange(async (value) => {
+            this.plugin.settings.groupAutomaticSuggestionsByTag = value;
+            await this.plugin.saveSettings();
+            this.display();
+          });
+      });
+
+    if (this.shouldShowCustomLinksPosition()) {
+      new Setting(containerEl)
+        .setName("Custom links position")
+        .setDesc("Choose where custom links appear relative to automatic suggestions: above, below, or hidden.")
+        .addDropdown((dropdown) => {
+          dropdown
+            .addOption("above", "Above automatic suggestions")
+            .addOption("below", "Below automatic suggestions")
+            .addOption("hidden", "Hidden")
+            .setValue(this.plugin.settings.customLinksPosition)
+            .onChange(async (value) => {
+              if (value === "above" || value === "below" || value === "hidden") {
+                this.plugin.settings.customLinksPosition = value;
+                await this.plugin.saveSettings();
+              }
+            });
+        });
+    }
+
+    new Setting(containerEl)
+      .setName("Custom group label")
+      .setDesc("Label for grouped links that don't match a specific tag. Uses alphanumeric characters only (a-z, 0-9). Maximum 255 characters.")
+      .addText((text) => {
+        text
+          .setPlaceholder(DEFAULT_CUSTOM_GROUP_LABEL)
+          .setValue(this.plugin.settings.customGroupLabel)
+          .onChange(async (value) => {
+            const sanitized = sanitizeCustomGroupLabel(value);
+            this.plugin.settings.customGroupLabel = sanitized;
+            if (sanitized !== value) {
+              new Notice(`Custom group label was sanitized to: ${sanitized}`);
+              text.setValue(sanitized);
+            }
+            await this.plugin.saveSettings();
+          });
+      });
   }
 
   getSettingDefinitions(): DeclarativeSettingDefinition[] {
+    try {
+      return this.buildSettingDefinitions();
+    } catch (error) {
+      console.error("[see-also-sidebar] Failed to build declarative settings definitions", error);
+      return [];
+    }
+  }
+
+  private shouldShowCustomLinksPosition(): boolean {
+    return this.plugin.settings.automaticSuggestions === true && this.plugin.settings.groupAutomaticSuggestionsByTag === true;
+  }
+
+  private buildSettingDefinitions(): DeclarativeSettingDefinition[] {
     const textControl: DeclarativeControl = {
       type: "text",
       key: "sidebarHeadingText",
@@ -87,6 +202,16 @@ export class SeeAlsoSettingTab extends PluginSettingTab {
     const toggleGroupBytag: DeclarativeControl = {
       type: "toggle",
       key: "groupAutomaticSuggestionsByTag",
+    };
+    const customLinksPositionControl: DeclarativeControl = {
+      type: "dropdown",
+      key: "customLinksPosition",
+      defaultValue: "above",
+      options: {
+        above: "Above automatic suggestions",
+        below: "Below automatic suggestions",
+        hidden: "Hidden",
+      },
     };
     const customLabelControl: DeclarativeControl = {
       type: "text",
@@ -124,6 +249,12 @@ export class SeeAlsoSettingTab extends PluginSettingTab {
         name: "Group automatic suggestions by tag",
         desc: "When enabled, automatic suggestions can be grouped by their shared tag.",
         control: toggleGroupBytag,
+      },
+      {
+        name: "Custom links position",
+        desc: "Choose where custom links appear relative to automatic suggestions: above, below, or hidden.",
+        visible: () => this.shouldShowCustomLinksPosition(),
+        control: customLinksPositionControl,
       },
       {
         name: "Custom group label",

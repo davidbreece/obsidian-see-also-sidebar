@@ -3,6 +3,7 @@ import { Plugin, TFile } from "obsidian";
 import {
   DEFAULT_SETTINGS,
   sanitizeCustomGroupLabel,
+  type SeeAlsoListPosition,
   type SeeAlsoSettings,
   SeeAlsoSettingTab,
 } from "./settings";
@@ -25,6 +26,13 @@ export default class SeeAlsoPlugin extends Plugin {
     return this.getAutomaticSuggestionsEnabled() && this.settings.groupAutomaticSuggestionsByTag === true;
   }
 
+  private getCustomLinksPosition(): SeeAlsoListPosition {
+    const position = this.settings?.customLinksPosition;
+    return position === "above" || position === "below" || position === "hidden"
+      ? position
+      : "above";
+  }
+
   private parseSettings(data: unknown): Partial<SeeAlsoSettings> {
     if (!data || typeof data !== "object") return {};
     const record = data as Record<string, unknown>;
@@ -41,6 +49,13 @@ export default class SeeAlsoPlugin extends Plugin {
     }
     if (typeof record.groupAutomaticSuggestionsByTag === "boolean") {
       parsed.groupAutomaticSuggestionsByTag = record.groupAutomaticSuggestionsByTag;
+    }
+    if (
+      record.customLinksPosition === "above" ||
+      record.customLinksPosition === "below" ||
+      record.customLinksPosition === "hidden"
+    ) {
+      parsed.customLinksPosition = record.customLinksPosition;
     }
     if (typeof record.customGroupLabel === "string") {
       // Store only the normalized value so the view can depend on it.
@@ -60,15 +75,18 @@ export default class SeeAlsoPlugin extends Plugin {
   async onload(): Promise<void> {
     await this.loadSettings();
 
-    this.registerView(SEE_ALSO_VIEW_TYPE, (leaf) =>
-      new SeeAlsoView(leaf, {
+    this.registerView(SEE_ALSO_VIEW_TYPE, (leaf) => {
+      const viewDeps = {
         getSidebarHeadingText: () => this.settings.sidebarHeadingText,
         getOpenInNewTabByDefault: () => this.getOpenInNewTabByDefault(),
         getAutomaticSuggestionsEnabled: () => this.getAutomaticSuggestionsEnabled(),
         getGroupAutomaticSuggestionsByTagEnabled: () => this.getGroupAutomaticSuggestionsByTagEnabled(),
+        getCustomLinksPosition: () => this.getCustomLinksPosition(),
         getCustomGroupLabel: () => sanitizeCustomGroupLabel(this.settings.customGroupLabel),
-      })
-    );
+      };
+
+      return new SeeAlsoView(leaf, viewDeps);
+    });
 
     this.addSettingTab(new SeeAlsoSettingTab(this.app, this));
 
