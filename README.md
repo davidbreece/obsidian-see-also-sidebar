@@ -5,7 +5,7 @@ Display related notes from frontmatter in a dedicated sidebar view.
 | Field | Value |
 | --- | --- |
 | Author | David Breece |
-| Version | 1.3.0 |
+| Version | 1.3.1 |
 | Minimum Obsidian version | 1.13.0 |
 
 ## Table of contents
@@ -101,9 +101,10 @@ When **Automatic suggestions** is enabled, notes that share tags with the active
 
 Behavior details:
 
-- Explicit `see-also` entries are always included.
+- Explicit `see-also` entries are always included (unless hidden via **Custom links position** setting).
 - With grouping disabled, automatic suggestions are merged into one flat list.
 - With grouping enabled, explicit entries are rendered under the configured **Custom group label**, and automatic entries are rendered directly under tag headers.
+- When grouping is enabled, the **Custom links position** setting controls where explicit entries appear: above automatic suggestions (default), below automatic suggestions, or hidden.
 - In grouped mode, there is no intermediate **Suggestions** heading.
 - The active note is never included in automatic suggestions.
 - Duplicate notes are shown only once.
@@ -123,6 +124,7 @@ Settings location:
 | Automatic suggestions | Boolean | `false` | When enabled, the sidebar also includes notes that share tags with the active note. |
 | Group automatic suggestions by tag | Boolean | `true` | When enabled (and automatic suggestions is on), grouped mode shows the configured **Custom group label** followed by tag-based sections. |
 | Custom group label | String | `Custom` | Label used for explicit `see-also` entries in grouped mode. Non-alphanumeric characters are removed; empty values fall back to `Custom`. |
+| Custom links position | Dropdown | `Above` | Controls where explicit `see-also` entries appear relative to automatic suggestions. Options: **Above** (before tag groups), **Below** (after tag groups), or **Hidden** (only show automatic suggestions). Only visible when both automatic suggestions and grouping are enabled. |
 
 ## Privacy & Data Access
 
