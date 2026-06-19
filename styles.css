@@ -1,5 +1,16 @@
+.see-also-container {
+  position: relative;
+  overflow: hidden;
+}
 .see-also-root {
   padding: 12px;
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  overflow-y: auto;
+  box-sizing: border-box;
 }
 .see-also-heading {
   font-size: var(--font-ui-small);

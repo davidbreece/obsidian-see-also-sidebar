@@ -45,6 +45,7 @@ export class SeeAlsoView extends ItemView {
   }
 
   async onOpen(): Promise<void> {
+    this.containerEl.addClass("see-also-container");
     this.installDelegatedHandlers();
     await this.refresh();
   }
@@ -125,9 +126,8 @@ export class SeeAlsoView extends ItemView {
     this.renderToken++;
     const token = this.renderToken;
 
-    const root = this.containerEl;
-    root.empty();
-    root.addClass("see-also-root");
+    this.containerEl.empty();
+    const root = this.containerEl.createDiv({ cls: "see-also-root" });
 
     const resolved = await resolveSeeAlsoEntries(
       notes,
