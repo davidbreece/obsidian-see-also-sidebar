@@ -33,31 +33,6 @@ export interface SeeAlsoSettings {
   customGroupLabel: string;
 }
 
-type DeclarativeControl =
-  | {
-      type: "text";
-      key: keyof SeeAlsoSettings;
-      placeholder?: string;
-      validate?: (value: string) => string | undefined;
-    }
-  | {
-      type: "toggle";
-      key: keyof SeeAlsoSettings;
-    }
-  | {
-      type: "dropdown";
-      key: keyof SeeAlsoSettings;
-      options: Record<string, string>;
-      defaultValue?: string;
-    };
-
-interface DeclarativeSettingDefinition {
-  name: string;
-  desc?: string;
-  visible?: boolean | (() => boolean);
-  control: DeclarativeControl;
-}
-
 export const DEFAULT_SETTINGS: SeeAlsoSettings = {
   sidebarHeadingText: "See also",
   openInNewTabByDefault: false,
@@ -172,95 +147,7 @@ export class SeeAlsoSettingTab extends PluginSettingTab {
       });
   }
 
-  getSettingDefinitions(): DeclarativeSettingDefinition[] {
-    try {
-      return this.buildSettingDefinitions();
-    } catch (error) {
-      console.error("[see-also-sidebar] Failed to build declarative settings definitions", error);
-      return [];
-    }
-  }
-
   private shouldShowCustomLinksPosition(): boolean {
     return this.plugin.settings.automaticSuggestions === true && this.plugin.settings.groupAutomaticSuggestionsByTag === true;
-  }
-
-  private buildSettingDefinitions(): DeclarativeSettingDefinition[] {
-    const textControl: DeclarativeControl = {
-      type: "text",
-      key: "sidebarHeadingText",
-      placeholder: "See also",
-    };
-    const toggleOpenNewTab: DeclarativeControl = {
-      type: "toggle",
-      key: "openInNewTabByDefault",
-    };
-    const toggleAutoSuggestions: DeclarativeControl = {
-      type: "toggle",
-      key: "automaticSuggestions",
-    };
-    const toggleGroupBytag: DeclarativeControl = {
-      type: "toggle",
-      key: "groupAutomaticSuggestionsByTag",
-    };
-    const customLinksPositionControl: DeclarativeControl = {
-      type: "dropdown",
-      key: "customLinksPosition",
-      defaultValue: "above",
-      options: {
-        above: "Above automatic suggestions",
-        below: "Below automatic suggestions",
-        hidden: "Hidden",
-      },
-    };
-    const customLabelControl: DeclarativeControl = {
-      type: "text",
-      key: "customGroupLabel",
-      placeholder: DEFAULT_CUSTOM_GROUP_LABEL,
-      validate: (value: string) => {
-        const sanitized = sanitizeCustomGroupLabel(value);
-        if (sanitized !== value) {
-          new Notice(`Custom group label was sanitized to: ${sanitized}`);
-          this.plugin.settings.customGroupLabel = sanitized;
-          void this.plugin.saveSettings();
-          return `Sanitized to: ${sanitized}`;
-        }
-        return undefined;
-      },
-    };
-
-    return [
-      {
-        name: "Sidebar heading text",
-        desc: "Text shown above related notes in the sidebar.",
-        control: textControl,
-      },
-      {
-        name: "Open links in new tab",
-        desc: "When enabled, clicking a related note opens it in a new tab by default.",
-        control: toggleOpenNewTab,
-      },
-      {
-        name: "Automatic suggestions",
-        desc: "When enabled, the plugin scans Markdown file paths in your vault to find notes sharing tags with the active note. This is local only and disabled by default.",
-        control: toggleAutoSuggestions,
-      },
-      {
-        name: "Group automatic suggestions by tag",
-        desc: "When enabled, automatic suggestions can be grouped by their shared tag.",
-        control: toggleGroupBytag,
-      },
-      {
-        name: "Custom links position",
-        desc: "Choose where custom links appear relative to automatic suggestions: above, below, or hidden.",
-        visible: () => this.shouldShowCustomLinksPosition(),
-        control: customLinksPositionControl,
-      },
-      {
-        name: "Custom group label",
-        desc: "Label for grouped links that don't match a specific tag. Uses alphanumeric characters only (a-z, 0-9). Maximum 255 characters.",
-        control: customLabelControl,
-      },
-    ];
   }
 }
