@@ -1,8 +1,8 @@
 {
 	"id": "see-also-sidebar",
 	"name": "See Also Sidebar",
-	"version": "1.3.6",
-	"minAppVersion": "1.13.0",
+	"version": "1.3.7",
+	"minAppVersion": "1.7.2",
 	"description": "Display related notes in a sidebar view via a custom tag or automatically with similar tags.",
 	"author": "David Breece",
 	"isDesktopOnly": false
