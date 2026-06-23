@@ -134,16 +134,18 @@ export class SeeAlsoSettingTab extends PluginSettingTab {
       .addText((text) => {
         text
           .setPlaceholder(DEFAULT_CUSTOM_GROUP_LABEL)
-          .setValue(this.plugin.settings.customGroupLabel)
-          .onChange(async (value) => {
-            const sanitized = sanitizeCustomGroupLabel(value);
-            this.plugin.settings.customGroupLabel = sanitized;
-            if (sanitized !== value) {
-              new Notice(`Custom group label was sanitized to: ${sanitized}`);
-              text.setValue(sanitized);
-            }
-            await this.plugin.saveSettings();
-          });
+          .setValue(this.plugin.settings.customGroupLabel);
+
+        this.plugin.registerDomEvent(text.inputEl, "blur", async () => {
+          const value = text.getValue();
+          const sanitized = sanitizeCustomGroupLabel(value);
+          this.plugin.settings.customGroupLabel = sanitized;
+          if (sanitized !== value) {
+            new Notice(`Custom group label was sanitized to: ${sanitized}`);
+            text.setValue(sanitized);
+          }
+          await this.plugin.saveSettings();
+        });
       });
   }
 
