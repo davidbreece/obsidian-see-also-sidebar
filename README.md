@@ -5,8 +5,8 @@ Display related notes from frontmatter in a dedicated sidebar view.
 | Field | Value |
 | --- | --- |
 | Author | David Breece |
-| Version | 1.3.2 |
-| Minimum Obsidian version | 1.13.0 |
+| Version | 1.3.8 |
+| Minimum Obsidian version | 1.8.0 |
 
 ## Table of contents
 
@@ -35,6 +35,7 @@ See Also Sidebar reads a `see-also` property from the active note frontmatter an
 - Optional automatic suggestions based on shared tags
 - Optional grouped mode for automatic suggestions
 - Configurable sidebar heading text
+- Editable custom group label (validated on save, not while typing)
 
 ## Installation
 
@@ -123,7 +124,7 @@ Settings location:
 | Open links in new tab | Boolean | `false` | When enabled, related-note clicks open in a new tab by default. Ctrl/Cmd-click and middle-click still open in a new tab. |
 | Automatic suggestions | Boolean | `false` | When enabled, the sidebar also includes notes that share tags with the active note. |
 | Group automatic suggestions by tag | Boolean | `true` | When enabled (and automatic suggestions is on), grouped mode shows the configured **Custom group label** followed by tag-based sections. |
-| Custom group label | String | `Custom` | Label used for explicit `see-also` entries in grouped mode. Non-alphanumeric characters are removed; empty values fall back to `Custom`. |
+| Custom group label | String | `Custom` | Label used for explicit `see-also` entries in grouped mode. Non-alphanumeric characters are removed; empty values fall back to `Custom`. The field validates when you leave it, so you can freely clear and retype the label without interruption. |
 | Custom links position | Dropdown | `Above` | Controls where explicit `see-also` entries appear relative to automatic suggestions. Options: **Above** (before tag groups), **Below** (after tag groups), or **Hidden** (only show automatic suggestions). Only visible when both automatic suggestions and grouping are enabled. |
 
 ## Privacy & Data Access
